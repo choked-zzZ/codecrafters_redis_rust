@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{BufReader, Write};
 use std::net::TcpListener;
 
 fn main() {
@@ -7,7 +7,20 @@ fn main() {
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
-                stream.write_all(b"+PONG\r\n").unwrap();
+                let mut decoder =
+                    resp::Decoder::new(BufReader::new(stream.try_clone().expect("Clone failed")));
+                loop {
+                    match decoder.decode() {
+                        Err(e) => {
+                            eprintln!("{e}");
+                            break;
+                        }
+                        Ok(res) => {
+                            eprintln!("{res:?}");
+                            stream.write_all(b"+PONG\r\n").unwrap();
+                        }
+                    }
+                }
                 println!("accepted new connection");
             }
             Err(e) => {
