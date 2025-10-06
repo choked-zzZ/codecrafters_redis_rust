@@ -1,31 +1,41 @@
-use std::io::{BufReader, Write};
-use std::net::TcpListener;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpListener;
 
-fn main() {
-    let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
+#[tokio::main]
+async fn main() {
+    let listener = TcpListener::bind("127.0.0.1:6379").await.unwrap();
 
-    for stream in listener.incoming() {
-        match stream {
-            Ok(mut stream) => {
-                let mut decoder =
-                    resp::Decoder::new(BufReader::new(stream.try_clone().expect("Clone failed")));
-                loop {
-                    match decoder.decode() {
-                        Err(e) => {
-                            eprintln!("{e}");
-                            break;
-                        }
-                        Ok(res) => {
-                            eprintln!("{res:?}");
-                            stream.write_all(b"+PONG\r\n").unwrap();
-                        }
-                    }
+    loop {
+        let (mut stream, addr) = listener
+            .accept()
+            .await
+            .expect("listener connection failed.");
+        eprintln!("New connection from {addr}");
+
+        tokio::spawn(async move {
+            let (mut rd, mut wt) = stream.split();
+
+            let mut buf = Vec::new();
+            loop {
+                if rd.read(&mut buf).await.expect("read stream error.") == 0 {
+                    break;
                 }
-                println!("accepted new connection");
+                match redis_protocol::resp2::decode::decode(&buf) {
+                    Err(e) => {
+                        eprintln!("{e}");
+                        break;
+                    }
+                    Ok(res) => match res {
+                        None => eprintln!("Incomplete frame."),
+                        Some((val, amt)) => {
+                            eprintln!("parsed {amt} byte(s) and get {val:?}");
+                            wt.write_all(b"+PONG\r\n").await.expect("write error.");
+                        }
+                    },
+                }
             }
-            Err(e) => {
-                println!("error: {}", e);
-            }
-        }
+            println!("accepted new connection");
+        });
     }
 }
