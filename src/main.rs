@@ -22,9 +22,12 @@ async fn main() {
             let mut buf = Vec::new();
             loop {
                 sleep(Duration::from_secs(2)).await;
-                if rd.read(&mut buf).await.expect("read stream error.") == 0 {
+                let mut temp = [0u8; 2048];
+                let read_size = rd.read(&mut temp).await.expect("read stream error.");
+                if read_size == 0 {
                     break;
                 }
+                buf.extend_from_slice(&temp[..read_size]);
                 match redis_protocol::resp2::decode::decode(&buf) {
                     Err(e) => {
                         eprintln!("{e}");
@@ -35,6 +38,7 @@ async fn main() {
                         Some((val, amt)) => {
                             eprintln!("parsed {amt} byte(s) and get {val:?}");
                             wt.write_all(b"+PONG\r\n").await.expect("write error.");
+                            buf.drain(..amt);
                         }
                     },
                 }
