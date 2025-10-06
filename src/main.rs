@@ -21,7 +21,6 @@ async fn main() {
 
             let mut buf = Vec::new();
             loop {
-                sleep(Duration::from_secs(2)).await;
                 let mut temp = [0u8; 2048];
                 let read_size = rd.read(&mut temp).await.expect("read stream error.");
                 if read_size == 0 {
