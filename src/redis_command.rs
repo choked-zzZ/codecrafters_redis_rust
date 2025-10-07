@@ -1,26 +1,44 @@
-use bytes::Bytes;
-use futures::SinkExt;
+use std::sync::Arc;
+
+use futures::{lock::Mutex, SinkExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 
-use crate::resp_decoder::{RespParser, Value};
+use crate::{
+    resp_decoder::{RespParser, Value},
+    Env,
+};
 
 pub enum RedisCommand {
     Ping,
     Echo(Value),
+    Set(Value, Value),
+    Get(Value),
 }
 
 impl RedisCommand {
     pub async fn exec(
         self,
         framed: &mut Framed<TcpStream, RespParser>,
+        env: Arc<Mutex<Env>>,
     ) -> Result<(), std::io::Error> {
         match self {
             RedisCommand::Ping => {
-                let response = Value::String(Bytes::from("PONG"));
+                let response = Value::String("PONG".into());
                 framed.send(response).await
             }
             RedisCommand::Echo(msg) => framed.send(msg).await,
+            RedisCommand::Set(k, v) => {
+                let mut env = env.lock().await;
+                env.map.insert(k, v);
+                framed.send(Value::String("OK".into())).await
+            }
+            RedisCommand::Get(k) => {
+                let env = env.lock().await;
+                framed
+                    .send(env.map.get(&k).unwrap_or(&Value::NullBulkString).clone())
+                    .await
+            }
         }
     }
     pub fn parse_command(value: Value) -> RedisCommand {

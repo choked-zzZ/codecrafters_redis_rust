@@ -6,7 +6,7 @@ use tokio_util::codec::{Decoder, Encoder};
 
 const CFLR: &[u8; 2] = b"\r\n";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Value {
     String(Bytes),
     Error(Bytes),
