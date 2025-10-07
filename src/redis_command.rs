@@ -54,6 +54,14 @@ impl RedisCommand {
                         assert!(arr.len() == 1);
                         RedisCommand::Ping
                     }
+                    Value::BulkString(s) if s == "SET" => {
+                        assert!(arr.len() == 3);
+                        RedisCommand::Set(arr.get(1).unwrap().clone(), arr.get(2).unwrap().clone())
+                    }
+                    Value::BulkString(s) if s == "GET" => {
+                        assert!(arr.len() == 2);
+                        RedisCommand::Get(arr.get(1).unwrap().clone())
+                    }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
             }
