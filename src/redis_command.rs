@@ -23,10 +23,7 @@ impl RedisCommand {
             RedisCommand::Echo(msg) => framed.send(msg).await,
         }
     }
-}
-
-impl RedisCommand {
-    fn parse_command(value: Value) -> RedisCommand {
+    pub fn parse_command(value: Value) -> RedisCommand {
         match value {
             Value::String(s) if s == "PING" => RedisCommand::Ping,
             Value::Array(ref arr) if !arr.is_empty() => {

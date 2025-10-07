@@ -1,10 +1,9 @@
-use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
 
+use crate::redis_command::RedisCommand;
 use crate::resp_decoder::RespParser;
-use crate::resp_decoder::Value;
 
 mod redis_command;
 mod resp_decoder;
@@ -16,9 +15,8 @@ async fn connection_handler(stream: TcpStream) {
         match result {
             Ok(value) => {
                 eprintln!("recieved: {value:?}");
-                let response = Value::String(Bytes::from("PONG"));
-                if let Err(e) = framed.send(response).await {
-                    eprintln!("failed to send response: {e}");
+                if let Err(e) = RedisCommand::parse_command(value).exec(&mut framed).await {
+                    eprintln!("carsh into error: {e}");
                     break;
                 }
             }
