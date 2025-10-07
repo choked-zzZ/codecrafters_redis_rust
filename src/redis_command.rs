@@ -25,14 +25,16 @@ impl RedisCommand {
     }
     pub fn parse_command(value: Value) -> RedisCommand {
         match value {
-            Value::String(s) if s == "PING" => RedisCommand::Ping,
             Value::Array(arr) if !arr.is_empty() => {
                 let command = arr.first().unwrap();
                 match command {
-                    Value::BulkString(s) => {
-                        assert!(s == "ECHO");
+                    Value::BulkString(s) if s == "ECHO" => {
                         assert!(arr.len() == 2);
                         RedisCommand::Echo(arr.get(1).unwrap().clone())
+                    }
+                    Value::BulkString(s) if s == "PING" => {
+                        assert!(arr.len() == 1);
+                        RedisCommand::Ping
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
