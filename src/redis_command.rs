@@ -22,6 +22,7 @@ pub enum RedisCommand {
     LRange(Value, isize, isize),
     LPush(Value, VecDeque<Value>),
     LLen(Value),
+    LPop(Value),
 }
 
 impl RedisCommand {
@@ -130,6 +131,16 @@ impl RedisCommand {
                     .unwrap_or(0) as i64;
                 framed.send(Value::Integer(len)).await
             }
+            RedisCommand::LPop(list_key) => {
+                let mut env = env.lock().await;
+                let item = env
+                    .map
+                    .get_mut(&list_key)
+                    .map(|(arr, _)| arr.as_array_mut().unwrap())
+                    .and_then(|x| x.pop_front())
+                    .unwrap_or(Value::NullBulkString);
+                framed.send(item).await
+            }
         }
     }
     pub fn parse_command(value: Value) -> RedisCommand {
@@ -138,7 +149,7 @@ impl RedisCommand {
                 let Value::BulkString(command_bytes) = arr.front().unwrap() else {
                     unreachable!();
                 };
-                let command = str::from_utf8(&command_bytes)
+                let command = str::from_utf8(command_bytes)
                     .expect("Should be utf-8 encoded command string.")
                     .to_ascii_uppercase();
                 match command.as_str() {
@@ -208,6 +219,11 @@ impl RedisCommand {
                         assert!(arr.len() == 2);
                         let list_key = arr.get(1).unwrap().clone();
                         RedisCommand::LLen(list_key)
+                    }
+                    "LPOP" => {
+                        assert!(arr.len() == 2);
+                        let list_key = arr.get(1).unwrap().clone();
+                        RedisCommand::LPop(list_key)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
