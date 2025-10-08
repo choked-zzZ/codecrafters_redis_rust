@@ -132,8 +132,8 @@ impl RedisCommand {
                         RedisCommand::RPush(list_key, item)
                     }
                     Value::BulkString(s) if s == "LRANGE" => {
-                        assert!(arr.len() == 3);
-                        let list_key = arr.get(0).unwrap().clone();
+                        assert!(arr.len() == 4);
+                        let list_key = arr.first().unwrap().clone();
                         let l = arr.get(1).unwrap().as_integer().unwrap() as usize;
                         let r = arr.get(2).unwrap().as_integer().unwrap() as usize;
                         RedisCommand::LRANGE(list_key, l, r)
