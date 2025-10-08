@@ -2,6 +2,7 @@ use core::panic;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use futures::lock;
 use futures::{lock::Mutex, SinkExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
@@ -17,6 +18,7 @@ pub enum RedisCommand {
     Set(Value, Value, Option<SystemTime>),
     Get(Value),
     RPush(Value, Vec<Value>),
+    LRANGE(Value, usize, usize),
 }
 
 impl RedisCommand {
@@ -64,6 +66,14 @@ impl RedisCommand {
                     .unwrap()
                     .len();
                 framed.send(Value::Integer(len as i64)).await
+            }
+            RedisCommand::LRANGE(list_key, l, r) => {
+                let env = env.lock().await;
+                let Value::Array(arr) = &env.map.get(&list_key).unwrap().0 else {
+                    return framed.send(Value::Array(Vec::new())).await;
+                };
+                let slice = Value::Array(arr[l..=r].to_vec());
+                framed.send(slice).await
             }
         }
     }
@@ -120,6 +130,13 @@ impl RedisCommand {
                         let list_key = arr.get(1).unwrap().clone();
                         let item = arr.into_iter().skip(2).collect();
                         RedisCommand::RPush(list_key, item)
+                    }
+                    Value::BulkString(s) if s == "LRANGE" => {
+                        assert!(arr.len() == 3);
+                        let list_key = arr.get(0).unwrap().clone();
+                        let l = arr.get(1).unwrap().as_integer().unwrap() as usize;
+                        let r = arr.get(2).unwrap().as_integer().unwrap() as usize;
+                        RedisCommand::LRANGE(list_key, l, r)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
