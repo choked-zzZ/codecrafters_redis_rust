@@ -1,4 +1,5 @@
 use core::panic;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -16,7 +17,7 @@ pub enum RedisCommand {
     Echo(Value),
     Set(Value, Value, Option<SystemTime>),
     Get(Value),
-    RPush(Value, Vec<Value>),
+    RPush(Value, VecDeque<Value>),
     LRange(Value, isize, isize),
 }
 
@@ -58,7 +59,7 @@ impl RedisCommand {
                 let len = env
                     .map
                     .entry(list_key)
-                    .and_modify(|(val, _)| val.as_array_mut().unwrap().extend_from_slice(&item))
+                    .and_modify(|(val, _)| val.as_array_mut().unwrap().extend(item.clone()))
                     .or_insert((Value::Array(item), None))
                     .0
                     .as_array()
@@ -69,7 +70,7 @@ impl RedisCommand {
             RedisCommand::LRange(list_key, l, r) => {
                 let env = env.lock().await;
                 let Some((Value::Array(arr), _)) = &env.map.get(&list_key) else {
-                    return framed.send(Value::Array(Vec::new())).await;
+                    return framed.send(Value::Array(VecDeque::new())).await;
                 };
                 let len = arr.len();
                 let l = if l >= 0 {
@@ -83,9 +84,9 @@ impl RedisCommand {
                     len.checked_add_signed(r).unwrap_or(0)
                 };
                 if l >= len || l > r {
-                    return framed.send(Value::Array(Vec::new())).await;
+                    return framed.send(Value::Array(VecDeque::new())).await;
                 }
-                let slice = Value::Array(arr[l..=r.min(len - 1)].to_vec());
+                let slice = Value::Array(arr.range(l..=r).map(|x| x.clone()).collect());
                 framed.send(slice).await
             }
         }
@@ -93,7 +94,7 @@ impl RedisCommand {
     pub fn parse_command(value: Value) -> RedisCommand {
         match value {
             Value::Array(arr) if !arr.is_empty() => {
-                let command = arr.first().unwrap();
+                let command = arr.get(0).unwrap();
                 match command {
                     Value::BulkString(s) if s == "ECHO" => {
                         assert!(arr.len() == 2);
@@ -108,7 +109,7 @@ impl RedisCommand {
                         let time = if arr.len() == 5 {
                             let mut now = SystemTime::now();
                             let number =
-                                str::from_utf8(arr.last().unwrap().as_bulk_string().unwrap())
+                                str::from_utf8(arr.get(4).unwrap().as_bulk_string().unwrap())
                                     .unwrap()
                                     .parse::<u64>()
                                     .unwrap();
