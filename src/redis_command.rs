@@ -23,6 +23,7 @@ pub enum RedisCommand {
     LPush(Value, VecDeque<Value>),
     LLen(Value),
     LPop(Value),
+    LPopMany(Value, usize),
 }
 
 impl RedisCommand {
@@ -141,6 +142,16 @@ impl RedisCommand {
                     .unwrap_or(Value::NullBulkString);
                 framed.send(item).await
             }
+            RedisCommand::LPopMany(list_key, remove_size) => {
+                let mut env = env.lock().await;
+                let item = env
+                    .map
+                    .get_mut(&list_key)
+                    .map(|(arr, _)| arr.as_array_mut().unwrap())
+                    .map(|x| Value::Array(x.split_off(remove_size.min(x.len()))))
+                    .unwrap_or(Value::NullBulkString);
+                framed.send(item).await
+            }
         }
     }
     pub fn parse_command(value: Value) -> RedisCommand {
@@ -223,7 +234,10 @@ impl RedisCommand {
                     "LPOP" => {
                         assert!(arr.len() == 2);
                         let list_key = arr.get(1).unwrap().clone();
-                        RedisCommand::LPop(list_key)
+                        match arr.get(2).map(|x| x.as_integer().unwrap() as usize) {
+                            Some(int) => RedisCommand::LPopMany(list_key, int),
+                            None => RedisCommand::LPop(list_key),
+                        }
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
