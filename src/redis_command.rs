@@ -116,7 +116,7 @@ impl RedisCommand {
                         RedisCommand::Get(arr.get(1).unwrap().clone())
                     }
                     Value::BulkString(s) if s == "RPUSH" => {
-                        assert!(arr.len() == 3);
+                        assert!(arr.len() >= 3);
                         let list_key = arr.get(1).unwrap().clone();
                         let item = arr.into_iter().skip(2).collect();
                         RedisCommand::RPush(list_key, item)
