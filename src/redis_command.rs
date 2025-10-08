@@ -21,6 +21,7 @@ pub enum RedisCommand {
     RPush(Value, VecDeque<Value>),
     LRange(Value, isize, isize),
     LPush(Value, VecDeque<Value>),
+    LLen(Value),
 }
 
 impl RedisCommand {
@@ -120,22 +121,36 @@ impl RedisCommand {
                 } as _;
                 framed.send(Value::Integer(len)).await
             }
+            RedisCommand::LLen(list_key) => {
+                let env = env.lock().await;
+                let len = env
+                    .map
+                    .get(&list_key)
+                    .map(|(arr, _)| arr.as_array().unwrap().len())
+                    .unwrap_or(0) as i64;
+                framed.send(Value::Integer(len)).await
+            }
         }
     }
     pub fn parse_command(value: Value) -> RedisCommand {
         match value {
             Value::Array(arr) if !arr.is_empty() => {
-                let command = arr.front().unwrap();
-                match command {
-                    Value::BulkString(s) if s == "ECHO" => {
+                let Value::BulkString(command_bytes) = arr.front().unwrap() else {
+                    unreachable!();
+                };
+                let command = str::from_utf8(&command_bytes)
+                    .expect("Should be utf-8 encoded command string.")
+                    .to_ascii_uppercase();
+                match command.as_str() {
+                    "ECHO" => {
                         assert!(arr.len() == 2);
                         RedisCommand::Echo(arr.get(1).unwrap().clone())
                     }
-                    Value::BulkString(s) if s == "PING" => {
+                    "PING" => {
                         assert!(arr.len() == 1);
                         RedisCommand::Ping
                     }
-                    Value::BulkString(s) if s == "SET" => {
+                    "SET" => {
                         assert!(matches!(arr.len(), 3 | 5));
                         let time = if arr.len() == 5 {
                             let mut now = SystemTime::now();
@@ -166,28 +181,33 @@ impl RedisCommand {
                             time,
                         )
                     }
-                    Value::BulkString(s) if s == "GET" => {
+                    "GET" => {
                         assert!(arr.len() == 2);
                         RedisCommand::Get(arr.get(1).unwrap().clone())
                     }
-                    Value::BulkString(s) if s == "RPUSH" => {
+                    "RPUSH" => {
                         assert!(arr.len() >= 3);
                         let list_key = arr.get(1).unwrap().clone();
                         let items = arr.into_iter().skip(2).collect();
                         RedisCommand::RPush(list_key, items)
                     }
-                    Value::BulkString(s) if s == "LRANGE" => {
+                    "LRANGE" => {
                         assert!(arr.len() == 4);
                         let list_key = arr.get(1).unwrap().clone();
                         let l = arr.get(2).unwrap().as_integer().unwrap() as isize;
                         let r = arr.get(3).unwrap().as_integer().unwrap() as isize;
                         RedisCommand::LRange(list_key, l, r)
                     }
-                    Value::BulkString(s) if s == "LPUSH" => {
+                    "LPUSH" => {
                         assert!(arr.len() >= 3);
                         let list_key = arr.get(1).unwrap().clone();
                         let items = arr.into_iter().skip(2).collect();
                         RedisCommand::LPush(list_key, items)
+                    }
+                    "LLEN" => {
+                        assert!(arr.len() == 2);
+                        let list_key = arr.get(1).unwrap().clone();
+                        RedisCommand::LLen(list_key)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
