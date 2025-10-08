@@ -133,9 +133,9 @@ impl RedisCommand {
                     }
                     Value::BulkString(s) if s == "LRANGE" => {
                         assert!(arr.len() == 4);
-                        let list_key = arr.first().unwrap().clone();
-                        let l = arr.get(1).unwrap().as_integer().unwrap() as usize;
-                        let r = arr.get(2).unwrap().as_integer().unwrap() as usize;
+                        let list_key = arr.get(1).unwrap().clone();
+                        let l = arr.get(2).unwrap().as_integer().unwrap() as usize;
+                        let r = arr.get(3).unwrap().as_integer().unwrap() as usize;
                         RedisCommand::LRANGE(list_key, l, r)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
