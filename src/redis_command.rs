@@ -70,14 +70,18 @@ impl RedisCommand {
                         assert!(matches!(arr.len(), 3 | 5));
                         let time = if s.len() == 5 {
                             let mut now = SystemTime::now();
-                            let number = arr[4].as_integer().unwrap();
+                            let number =
+                                str::from_utf8(arr.last().unwrap().as_bulk_string().unwrap())
+                                    .unwrap()
+                                    .parse::<u64>()
+                                    .unwrap();
                             let Value::BulkString(s) = &arr[3] else {
                                 panic!("bad argument.")
                             };
                             let duration = if s == "EX" {
-                                Duration::from_secs(number as u64)
+                                Duration::from_secs(number)
                             } else if s == "PX" {
-                                Duration::from_millis(number as u64)
+                                Duration::from_millis(number)
                             } else {
                                 panic!("bad argument.");
                             };
