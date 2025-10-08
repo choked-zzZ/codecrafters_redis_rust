@@ -147,8 +147,8 @@ impl RedisCommand {
                 let item = env
                     .map
                     .get_mut(&list_key)
-                    .map(|(arr, _)| dbg!(arr.as_array_mut().unwrap()))
-                    .map(|x| Value::Array(dbg!(x.split_off(remove_size.min(x.len())))))
+                    .map(|(arr, _)| arr.as_array_mut().unwrap())
+                    .map(|x| Value::Array(x.drain(..remove_size.min(x.len())).collect()))
                     .unwrap_or(Value::NullBulkString);
                 framed.send(item).await
             }
