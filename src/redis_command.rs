@@ -1,4 +1,5 @@
 use core::panic;
+use std::collections::hash_map::Entry;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -19,6 +20,7 @@ pub enum RedisCommand {
     Get(Value),
     RPush(Value, VecDeque<Value>),
     LRange(Value, isize, isize),
+    LPush(Value, VecDeque<Value>),
 }
 
 impl RedisCommand {
@@ -54,17 +56,24 @@ impl RedisCommand {
                 };
                 framed.send(item).await
             }
-            RedisCommand::RPush(list_key, item) => {
+            RedisCommand::RPush(list_key, mut items) => {
                 let mut env = env.lock().await;
-                let len = env
-                    .map
-                    .entry(list_key)
-                    .and_modify(|(val, _)| val.as_array_mut().unwrap().extend(item.clone()))
-                    .or_insert((Value::Array(item), None))
-                    .0
-                    .as_array()
-                    .unwrap()
-                    .len();
+                let len = match env.map.entry(list_key) {
+                    Entry::Occupied(mut ent) => {
+                        if let Value::Array(ref mut arr) = ent.get_mut().0 {
+                            arr.append(&mut items);
+                            arr.len()
+                        } else {
+                            panic!("not a list.");
+                        }
+                    }
+                    Entry::Vacant(e) => {
+                        let Value::Array(arr) = &e.insert((Value::Array(items), None)).0 else {
+                            unreachable!()
+                        };
+                        arr.len()
+                    }
+                };
                 framed.send(Value::Integer(len as i64)).await
             }
             RedisCommand::LRange(list_key, l, r) => {
@@ -79,22 +88,44 @@ impl RedisCommand {
                     len.checked_add_signed(l).unwrap_or(0)
                 };
                 let r = if r >= 0 {
-                    r as usize
+                    (r as usize).min(len - 1)
                 } else {
                     len.checked_add_signed(r).unwrap_or(0)
                 };
                 if l >= len || l > r {
                     return framed.send(Value::Array(VecDeque::new())).await;
                 }
+                #[allow(clippy::map_clone)]
                 let slice = Value::Array(arr.range(l..=r).map(|x| x.clone()).collect());
                 framed.send(slice).await
+            }
+            RedisCommand::LPush(list_key, items) => {
+                let mut env = env.lock().await;
+                let len = match env.map.entry(list_key) {
+                    Entry::Occupied(mut entry) => {
+                        if let Value::Array(ref mut arr) = entry.get_mut().0 {
+                            items.into_iter().for_each(|x| arr.push_front(x));
+                            eprintln!("{arr:?}");
+                            arr.len()
+                        } else {
+                            panic!("not a list.")
+                        }
+                    }
+                    Entry::Vacant(e) => {
+                        let Value::Array(arr) = &e.insert((Value::Array(items), None)).0 else {
+                            unreachable!()
+                        };
+                        arr.len()
+                    }
+                } as _;
+                framed.send(Value::Integer(len)).await
             }
         }
     }
     pub fn parse_command(value: Value) -> RedisCommand {
         match value {
             Value::Array(arr) if !arr.is_empty() => {
-                let command = arr.get(0).unwrap();
+                let command = arr.front().unwrap();
                 match command {
                     Value::BulkString(s) if s == "ECHO" => {
                         assert!(arr.len() == 2);
@@ -142,8 +173,8 @@ impl RedisCommand {
                     Value::BulkString(s) if s == "RPUSH" => {
                         assert!(arr.len() >= 3);
                         let list_key = arr.get(1).unwrap().clone();
-                        let item = arr.into_iter().skip(2).collect();
-                        RedisCommand::RPush(list_key, item)
+                        let items = arr.into_iter().skip(2).collect();
+                        RedisCommand::RPush(list_key, items)
                     }
                     Value::BulkString(s) if s == "LRANGE" => {
                         assert!(arr.len() == 4);
@@ -151,6 +182,12 @@ impl RedisCommand {
                         let l = arr.get(2).unwrap().as_integer().unwrap() as isize;
                         let r = arr.get(3).unwrap().as_integer().unwrap() as isize;
                         RedisCommand::LRange(list_key, l, r)
+                    }
+                    Value::BulkString(s) if s == "LPUSH" => {
+                        assert!(arr.len() >= 3);
+                        let list_key = arr.get(1).unwrap().clone();
+                        let items = arr.into_iter().skip(2).collect();
+                        RedisCommand::LPush(list_key, items)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
