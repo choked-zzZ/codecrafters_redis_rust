@@ -16,6 +16,7 @@ pub enum RedisCommand {
     Echo(Value),
     Set(Value, Value, Option<SystemTime>),
     Get(Value),
+    RPush(Value, Value),
 }
 
 impl RedisCommand {
@@ -50,6 +51,19 @@ impl RedisCommand {
                     }
                 };
                 framed.send(item).await
+            }
+            RedisCommand::RPush(list_key, item) => {
+                let mut env = env.lock().await;
+                let len = env
+                    .map
+                    .entry(list_key)
+                    .and_modify(|(val, _)| val.as_array_mut().unwrap().push(item.clone()))
+                    .or_insert((Value::Array(vec![item.clone()]), None))
+                    .0
+                    .as_array()
+                    .unwrap()
+                    .len();
+                framed.send(Value::Integer(len as i64)).await
             }
         }
     }
@@ -100,6 +114,12 @@ impl RedisCommand {
                     Value::BulkString(s) if s == "GET" => {
                         assert!(arr.len() == 2);
                         RedisCommand::Get(arr.get(1).unwrap().clone())
+                    }
+                    Value::BulkString(s) if s == "RPUSH" => {
+                        assert!(arr.len() == 3);
+                        let list_key = arr.get(1).unwrap().clone();
+                        let item = arr.get(2).unwrap().clone();
+                        RedisCommand::RPush(list_key, item)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
