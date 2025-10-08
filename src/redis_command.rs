@@ -41,6 +41,7 @@ impl RedisCommand {
                     None => Value::NullBulkString,
                     Some((val, expire_time)) => {
                         let now = SystemTime::now();
+                        eprintln!("now: {now:?}, expire_time: {expire_time:?}");
                         if expire_time.is_some() && expire_time.unwrap() < now {
                             Value::NullBulkString
                         } else {
