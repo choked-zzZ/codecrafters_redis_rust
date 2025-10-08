@@ -148,7 +148,7 @@ impl RedisCommand {
                     .map
                     .get_mut(&list_key)
                     .map(|(arr, _)| dbg!(arr.as_array_mut().unwrap()))
-                    .map(|x| Value::Array(x.split_off(remove_size.min(x.len()))))
+                    .map(|x| Value::Array(dbg!(x.split_off(remove_size.min(x.len())))))
                     .unwrap_or(Value::NullBulkString);
                 framed.send(item).await
             }
