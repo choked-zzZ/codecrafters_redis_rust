@@ -235,7 +235,7 @@ impl RedisCommand {
                         assert!(matches!(arr.len(), 2 | 3));
                         let list_key = arr.get(1).unwrap().clone();
                         match arr.get(2).map(|x| x.as_integer().unwrap() as usize) {
-                            Some(int) => RedisCommand::LPopMany(list_key, int + 1),
+                            Some(int) => RedisCommand::LPopMany(list_key, int),
                             None => RedisCommand::LPop(list_key),
                         }
                     }
