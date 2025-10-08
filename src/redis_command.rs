@@ -75,6 +75,7 @@ impl RedisCommand {
                                     .unwrap()
                                     .parse::<u64>()
                                     .unwrap();
+                            eprintln!("duration: {number}")
                             let Value::BulkString(s) = &arr[3] else {
                                 panic!("bad argument.")
                             };
