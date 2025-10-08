@@ -68,7 +68,7 @@ impl RedisCommand {
                     }
                     Value::BulkString(s) if s == "SET" => {
                         assert!(matches!(arr.len(), 3 | 5));
-                        let time = if s.len() == 5 {
+                        let time = if arr.len() == 5 {
                             let mut now = SystemTime::now();
                             let number =
                                 str::from_utf8(arr.last().unwrap().as_bulk_string().unwrap())
