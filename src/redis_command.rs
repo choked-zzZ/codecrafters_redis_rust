@@ -72,7 +72,11 @@ impl RedisCommand {
                 let Value::Array(arr) = &env.map.get(&list_key).unwrap().0 else {
                     return framed.send(Value::Array(Vec::new())).await;
                 };
-                let slice = Value::Array(arr[l..=r].to_vec());
+                let len = arr.len();
+                if l >= len || l > r {
+                    return framed.send(Value::Array(Vec::new())).await;
+                }
+                let slice = Value::Array(arr[l..=r.min(len - 1)].to_vec());
                 framed.send(slice).await
             }
         }
