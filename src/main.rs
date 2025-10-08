@@ -1,14 +1,15 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use futures::lock::Mutex;
-use futures::{SinkExt, StreamExt};
+use futures::StreamExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
 
 use crate::redis_command::RedisCommand;
-use crate::resp_decoder::{RespParser, Value};
+use crate::resp_decoder::RespParser;
+use env::Env;
 
+mod env;
 mod redis_command;
 mod resp_decoder;
 
@@ -52,9 +53,4 @@ async fn main() {
             connection_handler(stream, env).await;
         });
     }
-}
-
-#[derive(Debug, Default)]
-pub struct Env {
-    map: HashMap<Value, Value>,
 }

@@ -18,6 +18,22 @@ pub enum Value {
     Boolean(bool),
 }
 
+impl Value {
+    pub fn as_bulk_string(&self) -> Option<&Bytes> {
+        match self {
+            Value::BulkString(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn as_integer(&self) -> Option<i64> {
+        match self {
+            Value::Integer(i) => Some(*i),
+            _ => None,
+        }
+    }
+}
+
 enum ValueBufSplit {
     String(BufSplit),
     Error(BufSplit),

@@ -1,4 +1,6 @@
+use core::panic;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use futures::{lock::Mutex, SinkExt};
 use tokio::net::TcpStream;
@@ -12,7 +14,7 @@ use crate::{
 pub enum RedisCommand {
     Ping,
     Echo(Value),
-    Set(Value, Value),
+    Set(Value, Value, Option<SystemTime>),
     Get(Value),
 }
 
@@ -28,16 +30,25 @@ impl RedisCommand {
                 framed.send(response).await
             }
             RedisCommand::Echo(msg) => framed.send(msg).await,
-            RedisCommand::Set(k, v) => {
+            RedisCommand::Set(k, v, time) => {
                 let mut env = env.lock().await;
-                env.map.insert(k, v);
+                env.map.insert(k, (v, time));
                 framed.send(Value::String("OK".into())).await
             }
             RedisCommand::Get(k) => {
                 let env = env.lock().await;
-                framed
-                    .send(env.map.get(&k).unwrap_or(&Value::NullBulkString).clone())
-                    .await
+                let item = match env.map.get(&k) {
+                    None => Value::NullBulkString,
+                    Some((val, expire_time)) => {
+                        let now = SystemTime::now();
+                        if expire_time.is_some() && expire_time.unwrap() < now {
+                            Value::NullBulkString
+                        } else {
+                            val.clone()
+                        }
+                    }
+                };
+                framed.send(item).await
             }
         }
     }
@@ -55,8 +66,30 @@ impl RedisCommand {
                         RedisCommand::Ping
                     }
                     Value::BulkString(s) if s == "SET" => {
-                        assert!(arr.len() == 3);
-                        RedisCommand::Set(arr.get(1).unwrap().clone(), arr.get(2).unwrap().clone())
+                        assert!(matches!(arr.len(), 3 | 5));
+                        let time = if s.len() == 5 {
+                            let mut now = SystemTime::now();
+                            let number = arr[4].as_integer().unwrap();
+                            let Value::BulkString(s) = &arr[3] else {
+                                panic!("bad argument.")
+                            };
+                            let duration = if s == "EX" {
+                                Duration::from_secs(number as u64)
+                            } else if s == "PX" {
+                                Duration::from_millis(number as u64)
+                            } else {
+                                panic!("bad argument.");
+                            };
+                            now += duration;
+                            Some(now)
+                        } else {
+                            None
+                        };
+                        RedisCommand::Set(
+                            arr.get(1).unwrap().clone(),
+                            arr.get(2).unwrap().clone(),
+                            time,
+                        )
                     }
                     Value::BulkString(s) if s == "GET" => {
                         assert!(arr.len() == 2);
