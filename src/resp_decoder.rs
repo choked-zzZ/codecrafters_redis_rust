@@ -29,6 +29,7 @@ impl Value {
     pub fn as_integer(&self) -> Option<i64> {
         match self {
             Value::Integer(i) => Some(*i),
+            Value::BulkString(s) => str::from_utf8(s).ok().and_then(|s| s.parse::<i64>().ok()),
             _ => None,
         }
     }
