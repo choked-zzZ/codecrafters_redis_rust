@@ -2,7 +2,6 @@ use core::panic;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use futures::lock;
 use futures::{lock::Mutex, SinkExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
@@ -76,12 +75,12 @@ impl RedisCommand {
                 let l = if l >= 0 {
                     l as usize
                 } else {
-                    len.checked_add_signed(l).expect("Overflowed.")
+                    len.checked_add_signed(l).unwrap_or(0)
                 };
                 let r = if r >= 0 {
                     r as usize
                 } else {
-                    len.checked_add_signed(r).expect("Overflowed.")
+                    len.checked_add_signed(r).unwrap_or(0)
                 };
                 if l >= len || l > r {
                     return framed.send(Value::Array(Vec::new())).await;
