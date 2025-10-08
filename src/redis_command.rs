@@ -18,7 +18,7 @@ pub enum RedisCommand {
     Set(Value, Value, Option<SystemTime>),
     Get(Value),
     RPush(Value, Vec<Value>),
-    LRANGE(Value, usize, usize),
+    LRange(Value, isize, isize),
 }
 
 impl RedisCommand {
@@ -67,12 +67,22 @@ impl RedisCommand {
                     .len();
                 framed.send(Value::Integer(len as i64)).await
             }
-            RedisCommand::LRANGE(list_key, l, r) => {
+            RedisCommand::LRange(list_key, l, r) => {
                 let env = env.lock().await;
                 let Some((Value::Array(arr), _)) = &env.map.get(&list_key) else {
                     return framed.send(Value::Array(Vec::new())).await;
                 };
                 let len = arr.len();
+                let l = if l >= 0 {
+                    l as usize
+                } else {
+                    len.checked_add_signed(l).expect("Overflowed.")
+                };
+                let r = if r >= 0 {
+                    r as usize
+                } else {
+                    len.checked_add_signed(r).expect("Overflowed.")
+                };
                 if l >= len || l > r {
                     return framed.send(Value::Array(Vec::new())).await;
                 }
@@ -140,7 +150,7 @@ impl RedisCommand {
                         let list_key = arr.get(1).unwrap().clone();
                         let l = arr.get(2).unwrap().as_integer().unwrap() as usize;
                         let r = arr.get(3).unwrap().as_integer().unwrap() as usize;
-                        RedisCommand::LRANGE(list_key, l, r)
+                        RedisCommand::LRange(list_key, l, r)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
