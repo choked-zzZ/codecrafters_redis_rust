@@ -232,7 +232,7 @@ impl RedisCommand {
                         RedisCommand::LLen(list_key)
                     }
                     "LPOP" => {
-                        assert!(arr.len() == 2);
+                        assert!(matches!(arr.len(), 2 | 3));
                         let list_key = arr.get(1).unwrap().clone();
                         match arr.get(2).map(|x| x.as_integer().unwrap() as usize) {
                             Some(int) => RedisCommand::LPopMany(list_key, int),
