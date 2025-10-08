@@ -69,7 +69,7 @@ impl RedisCommand {
             }
             RedisCommand::LRANGE(list_key, l, r) => {
                 let env = env.lock().await;
-                let Value::Array(arr) = &env.map.get(&list_key).unwrap().0 else {
+                let Some((Value::Array(arr), _)) = &env.map.get(&list_key) else {
                     return framed.send(Value::Array(Vec::new())).await;
                 };
                 let len = arr.len();
