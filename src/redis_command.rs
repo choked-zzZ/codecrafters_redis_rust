@@ -289,14 +289,20 @@ async fn alert(list_key: Arc<Value>, env: &mut futures::lock::MutexGuard<'_, Env
     let Some(Value::Array(arr)) = env.map.get_mut(&list_key) else {
         unreachable!()
     };
-    let item = if arr.is_empty() {
-        return;
-    } else {
-        Value::Array(arr.drain(..1).collect())
-    };
+    let items = Value::Array(
+        [
+            Arc::as_ref(&list_key).clone(),
+            if arr.is_empty() {
+                return;
+            } else {
+                Value::Array(arr.drain(..1).collect())
+            },
+        ]
+        .into(),
+    );
     let Some(sender) = env.waitlist.get_mut(&list_key).and_then(|s| s.pop_front()) else {
         return;
     };
-    sender.send(item).ok();
+    sender.send(items).ok();
     eprintln!("send");
 }
