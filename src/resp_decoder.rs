@@ -113,9 +113,13 @@ impl Value {
     ) -> Option<StreamID> {
         let s = self.as_bulk_string()?;
         let mut last = stream.last_key_value().map(|x| *x.0).unwrap_or_default();
+        eprintln!("{last:?}");
         if let Some(idx) = memchr(b'-', s) {
             let f = str::from_utf8(&s[..idx]).unwrap().parse().unwrap();
-            last.ms_time = f;
+            if f != last.ms_time {
+                last.ms_time = f;
+                last.seq_num = -1;
+            }
             if let Ok(s) = str::from_utf8(&s[idx + 1..]).unwrap().parse() {
                 last.seq_num = s;
             } else {
@@ -123,6 +127,7 @@ impl Value {
             }
         };
         *self = Value::BulkString(format!("{}-{}", last.ms_time, last.seq_num).into());
+        eprintln!("{self:?}");
         Some(last)
     }
 }
