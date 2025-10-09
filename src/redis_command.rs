@@ -207,11 +207,13 @@ impl RedisCommand {
                 let stream_entry_key = stream_entry_id.as_entry_id().unwrap();
                 match env.map.entry(Arc::clone(&stream_key)) {
                     Entry::Occupied(mut map_entry) => {
-                        map_entry
-                            .get_mut()
-                            .as_stream_mut()
-                            .unwrap()
-                            .insert(stream_entry_key, kvp);
+                        let stream = map_entry.get_mut().as_stream_mut().unwrap();
+                        let last = stream.last_key_value().unwrap().0;
+                        if stream_entry_key < *last {
+                            let err = Value::Error("The ID specified in XADD is equal or smaller than the target stream top item".into());
+                            return framed.send(err).await;
+                        }
+                        stream.insert(stream_entry_key, kvp);
                     }
                     Entry::Vacant(map_entry) => {
                         let mut stream = Stream::new();
