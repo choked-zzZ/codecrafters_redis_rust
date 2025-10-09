@@ -34,6 +34,14 @@ impl Value {
         }
     }
 
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            Value::Integer(i) => Some(*i as f64),
+            Value::BulkString(s) => str::from_utf8(s).ok().and_then(|s| s.parse::<f64>().ok()),
+            _ => None,
+        }
+    }
+
     pub fn as_array(&self) -> Option<&VecDeque<Value>> {
         match self {
             Value::Array(arr) => Some(arr),

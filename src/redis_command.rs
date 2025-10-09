@@ -24,7 +24,7 @@ pub enum RedisCommand {
     LLen(Value),
     LPop(Value),
     LPopMany(Value, usize),
-    BLPop(Value, usize),
+    BLPop(Value, f64),
 }
 
 impl RedisCommand {
@@ -172,8 +172,8 @@ impl RedisCommand {
                     .entry(Arc::new(list_key))
                     .or_default()
                     .push_back(tx);
-                let item = if timeout_limit != 0 {
-                    timeout(Duration::from_secs(timeout_limit as u64), rx)
+                let item = if timeout_limit != 0f64 {
+                    timeout(Duration::from_secs_f64(timeout_limit), rx)
                         .await
                         .map(|x| x.expect("Call receiver after all the sender has been droped."))
                         .unwrap_or(Value::NullArray)
@@ -274,7 +274,7 @@ impl RedisCommand {
                     "BLPOP" => {
                         assert!(arr.len() == 3);
                         let list_key = arr.get(1).unwrap().clone();
-                        let timeout = arr.get(2).unwrap().as_integer().unwrap() as usize;
+                        let timeout = arr.get(2).unwrap().as_float().unwrap() as f64;
                         RedisCommand::BLPop(list_key, timeout)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
