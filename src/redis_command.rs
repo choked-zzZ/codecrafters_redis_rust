@@ -1,11 +1,11 @@
-use core::panic;
-use std::collections::hash_map::Entry;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use futures::{lock::Mutex, SinkExt};
 use tokio::net::TcpStream;
+use tokio::sync::oneshot;
+use tokio::time::timeout;
 use tokio_util::codec::Framed;
 
 use crate::{
@@ -24,6 +24,7 @@ pub enum RedisCommand {
     LLen(Value),
     LPop(Value),
     LPopMany(Value, usize),
+    BLPop(Value, usize),
 }
 
 impl RedisCommand {
@@ -40,17 +41,22 @@ impl RedisCommand {
             RedisCommand::Echo(msg) => framed.send(msg).await,
             RedisCommand::Set(k, v, time) => {
                 let mut env = env.lock().await;
-                env.map.insert(k, (v, time));
+                let k = Arc::new(k);
+                if let Some(time) = time {
+                    env.expiry.insert(k.clone(), time);
+                }
+                env.map.insert(k, v);
                 framed.send(Value::String("OK".into())).await
             }
             RedisCommand::Get(k) => {
                 let env = env.lock().await;
-                let item = match env.map.get(&k) {
-                    None => Value::NullBulkString,
-                    Some((val, expire_time)) => {
+                let item = match (env.map.get(&k), env.expiry.get(&k)) {
+                    (None, _) => Value::NullBulkString,
+                    (Some(val), None) => val.clone(),
+                    (Some(val), Some(expire_time)) => {
                         let now = SystemTime::now();
                         eprintln!("now: {now:?}, expire_time: {expire_time:?}");
-                        if expire_time.is_some() && expire_time.unwrap() < now {
+                        if *expire_time < now {
                             Value::NullBulkString
                         } else {
                             val.clone()
@@ -61,27 +67,28 @@ impl RedisCommand {
             }
             RedisCommand::RPush(list_key, mut items) => {
                 let mut env = env.lock().await;
-                let len = match env.map.entry(list_key) {
-                    Entry::Occupied(mut ent) => {
-                        if let Value::Array(ref mut arr) = ent.get_mut().0 {
+                let list_key = Arc::new(list_key);
+                let len = match env.map.get_mut(&list_key) {
+                    Some(val) => {
+                        if let Value::Array(arr) = val {
                             arr.append(&mut items);
                             arr.len()
                         } else {
                             panic!("not a list.");
                         }
                     }
-                    Entry::Vacant(e) => {
-                        let Value::Array(arr) = &e.insert((Value::Array(items), None)).0 else {
-                            unreachable!()
-                        };
-                        arr.len()
+                    None => {
+                        let len = items.len();
+                        env.map.insert(Arc::clone(&list_key), Value::Array(items));
+                        len
                     }
-                };
-                framed.send(Value::Integer(len as i64)).await
+                } as _;
+                alert(list_key, &mut env);
+                framed.send(Value::Integer(len)).await
             }
             RedisCommand::LRange(list_key, l, r) => {
                 let env = env.lock().await;
-                let Some((Value::Array(arr), _)) = &env.map.get(&list_key) else {
+                let Some(Value::Array(arr)) = &env.map.get(&list_key) else {
                     return framed.send(Value::Array(VecDeque::new())).await;
                 };
                 let len = arr.len();
@@ -104,23 +111,23 @@ impl RedisCommand {
             }
             RedisCommand::LPush(list_key, items) => {
                 let mut env = env.lock().await;
-                let len = match env.map.entry(list_key) {
-                    Entry::Occupied(mut entry) => {
-                        if let Value::Array(ref mut arr) = entry.get_mut().0 {
+                let list_key = Arc::new(list_key);
+                let len = match env.map.get_mut(&list_key) {
+                    Some(val) => {
+                        if let Value::Array(arr) = val {
                             items.into_iter().for_each(|x| arr.push_front(x));
-                            eprintln!("{arr:?}");
                             arr.len()
                         } else {
-                            panic!("not a list.")
+                            panic!("not a list.");
                         }
                     }
-                    Entry::Vacant(e) => {
-                        let Value::Array(arr) = &e.insert((Value::Array(items), None)).0 else {
-                            unreachable!()
-                        };
-                        arr.len()
+                    None => {
+                        let len = items.len();
+                        env.map.insert(Arc::clone(&list_key), Value::Array(items));
+                        len
                     }
                 } as _;
+                alert(list_key, &mut env);
                 framed.send(Value::Integer(len)).await
             }
             RedisCommand::LLen(list_key) => {
@@ -128,7 +135,7 @@ impl RedisCommand {
                 let len = env
                     .map
                     .get(&list_key)
-                    .map(|(arr, _)| arr.as_array().unwrap().len())
+                    .map(|arr| arr.as_array().unwrap().len())
                     .unwrap_or(0) as i64;
                 framed.send(Value::Integer(len)).await
             }
@@ -137,7 +144,7 @@ impl RedisCommand {
                 let item = env
                     .map
                     .get_mut(&list_key)
-                    .map(|(arr, _)| arr.as_array_mut().unwrap())
+                    .map(|arr| arr.as_array_mut().unwrap())
                     .and_then(|x| x.pop_front())
                     .unwrap_or(Value::NullBulkString);
                 framed.send(item).await
@@ -147,9 +154,33 @@ impl RedisCommand {
                 let item = env
                     .map
                     .get_mut(&list_key)
-                    .map(|(arr, _)| arr.as_array_mut().unwrap())
+                    .map(|arr| arr.as_array_mut().unwrap())
                     .map(|x| Value::Array(x.drain(..remove_size.min(x.len())).collect()))
                     .unwrap_or(Value::NullBulkString);
+                framed.send(item).await
+            }
+            RedisCommand::BLPop(list_key, timeout_limit) => {
+                if let Some(Value::Array(arr)) = env.lock().await.map.get_mut(&list_key) {
+                    if let Some(val) = arr.pop_front() {
+                        return framed.send(val).await;
+                    }
+                }
+                let (tx, rx) = oneshot::channel();
+                env.lock()
+                    .await
+                    .waitlist
+                    .entry(Arc::new(list_key))
+                    .or_default()
+                    .push_back(tx);
+                let item = if timeout_limit != 0 {
+                    timeout(Duration::from_secs(timeout_limit as u64), rx)
+                        .await
+                        .map(|x| x.expect("Call receiver after all the sender has been droped."))
+                        .unwrap_or(Value::NullArray)
+                } else {
+                    rx.await
+                        .expect("Call the receiver after all the sender has been droped.")
+                };
                 framed.send(item).await
             }
         }
@@ -239,10 +270,34 @@ impl RedisCommand {
                             None => RedisCommand::LPop(list_key),
                         }
                     }
+                    "BLPOP" => {
+                        assert!(arr.len() == 3);
+                        let list_key = arr.get(1).unwrap().clone();
+                        let timeout = arr.get(2).unwrap().as_integer().unwrap() as usize;
+                        RedisCommand::BLPop(list_key, timeout)
+                    }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
             }
             _ => panic!("Unknown command"),
         }
     }
+}
+
+async fn alert(list_key: Arc<Value>, env: &mut futures::lock::MutexGuard<'_, Env>) {
+    let Some(Value::Array(arr)) = env.map.get_mut(&list_key) else {
+        unreachable!()
+    };
+    let item = if arr.is_empty() {
+        return;
+    } else {
+        arr.pop_front().unwrap()
+    };
+    let Some(sender) = env.waitlist.get_mut(&list_key).and_then(|s| s.pop_front()) else {
+        return;
+    };
+    sender
+        // SAFETY: Has already been checked.
+        .send(item)
+        .ok();
 }
