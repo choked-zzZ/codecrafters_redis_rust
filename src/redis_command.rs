@@ -390,7 +390,7 @@ impl RedisCommand {
                     }
                     "XREAD" => {
                         let mode = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
-                        assert_eq!(mode, "STREAMS");
+                        // assert_eq!(mode, "STREAMS");
                         let key = arr.get(2).unwrap().as_bulk_string().unwrap().clone();
                         let id = arr.get(3).unwrap().clone();
                         RedisCommand::XRead(key, id)
