@@ -4,13 +4,14 @@ use std::{
     time::SystemTime,
 };
 
+use bytes::Bytes;
 use tokio::sync::oneshot::Sender;
 
 use crate::resp_decoder::Value;
 
 #[derive(Debug, Default)]
 pub struct Env {
-    pub map: HashMap<Arc<Value>, Value>,
-    pub expiry: HashMap<Arc<Value>, SystemTime>,
-    pub waitlist: HashMap<Arc<Value>, VecDeque<Sender<Value>>>,
+    pub map: HashMap<Arc<Bytes>, Value>,
+    pub expiry: HashMap<Arc<Bytes>, SystemTime>,
+    pub waitlist: HashMap<Arc<Bytes>, VecDeque<Sender<Value>>>,
 }

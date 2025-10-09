@@ -1,13 +1,17 @@
-use std::collections::VecDeque;
+use std::collections::hash_map::Entry;
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use bytes::Bytes;
 use futures::{lock::Mutex, SinkExt};
+use itertools::Itertools;
 use tokio::net::TcpStream;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 use tokio_util::codec::Framed;
 
+use crate::resp_decoder::Stream;
 use crate::{
     resp_decoder::{RespParser, Value},
     Env,
@@ -16,16 +20,17 @@ use crate::{
 pub enum RedisCommand {
     Ping,
     Echo(Value),
-    Set(Value, Value, Option<SystemTime>),
-    Get(Value),
-    RPush(Value, VecDeque<Value>),
-    LRange(Value, isize, isize),
-    LPush(Value, VecDeque<Value>),
-    LLen(Value),
-    LPop(Value),
-    LPopMany(Value, usize),
-    BLPop(Value, f64),
-    Type(Value),
+    Set(Bytes, Value, Option<SystemTime>),
+    Get(Bytes),
+    RPush(Bytes, VecDeque<Value>),
+    LRange(Bytes, isize, isize),
+    LPush(Bytes, VecDeque<Value>),
+    LLen(Bytes),
+    LPop(Bytes),
+    LPopMany(Bytes, usize),
+    BLPop(Bytes, f64),
+    Type(Bytes),
+    XAdd(Bytes, Value, HashMap<Bytes, Value>),
 }
 
 impl RedisCommand {
@@ -195,6 +200,26 @@ impl RedisCommand {
                 };
                 framed.send(response).await
             }
+            RedisCommand::XAdd(stream_key, stream_entry_id, kvp) => {
+                let mut env = env.lock().await;
+                let stream_key = Arc::new(stream_key);
+                let stream_entry_key = stream_entry_id.as_entry_id().unwrap();
+                match env.map.entry(Arc::clone(&stream_key)) {
+                    Entry::Occupied(mut map_entry) => {
+                        map_entry
+                            .get_mut()
+                            .as_stream_mut()
+                            .unwrap()
+                            .insert(stream_entry_key, kvp);
+                    }
+                    Entry::Vacant(map_entry) => {
+                        let mut stream = Stream::new();
+                        stream.insert(stream_entry_key, kvp);
+                        map_entry.insert(Value::Stream(stream));
+                    }
+                }
+                framed.send(stream_entry_id).await
+            }
         }
     }
     pub fn parse_command(value: Value) -> RedisCommand {
@@ -241,42 +266,42 @@ impl RedisCommand {
                             None
                         };
                         RedisCommand::Set(
-                            arr.get(1).unwrap().clone(),
+                            arr.get(1).unwrap().as_bulk_string().unwrap().clone(),
                             arr.get(2).unwrap().clone(),
                             time,
                         )
                     }
                     "GET" => {
                         assert!(arr.len() == 2);
-                        RedisCommand::Get(arr.get(1).unwrap().clone())
+                        RedisCommand::Get(arr.get(1).unwrap().as_bulk_string().unwrap().clone())
                     }
                     "RPUSH" => {
                         assert!(arr.len() >= 3);
-                        let list_key = arr.get(1).unwrap().clone();
+                        let list_key = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         let items = arr.into_iter().skip(2).collect();
                         RedisCommand::RPush(list_key, items)
                     }
                     "LRANGE" => {
                         assert!(arr.len() == 4);
-                        let list_key = arr.get(1).unwrap().clone();
+                        let list_key = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         let l = arr.get(2).unwrap().as_integer().unwrap() as isize;
                         let r = arr.get(3).unwrap().as_integer().unwrap() as isize;
                         RedisCommand::LRange(list_key, l, r)
                     }
                     "LPUSH" => {
                         assert!(arr.len() >= 3);
-                        let list_key = arr.get(1).unwrap().clone();
+                        let list_key = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         let items = arr.into_iter().skip(2).collect();
                         RedisCommand::LPush(list_key, items)
                     }
                     "LLEN" => {
                         assert!(arr.len() == 2);
-                        let list_key = arr.get(1).unwrap().clone();
+                        let list_key = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         RedisCommand::LLen(list_key)
                     }
                     "LPOP" => {
                         assert!(matches!(arr.len(), 2 | 3));
-                        let list_key = arr.get(1).unwrap().clone();
+                        let list_key = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         match arr.get(2).map(|x| x.as_integer().unwrap() as usize) {
                             Some(int) => RedisCommand::LPopMany(list_key, int),
                             None => RedisCommand::LPop(list_key),
@@ -284,14 +309,23 @@ impl RedisCommand {
                     }
                     "BLPOP" => {
                         assert!(arr.len() == 3);
-                        let list_key = arr.get(1).unwrap().clone();
-                        let timeout = arr.get(2).unwrap().as_float().unwrap() as f64;
+                        let list_key = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        let timeout = arr.get(2).unwrap().as_float().unwrap();
                         RedisCommand::BLPop(list_key, timeout)
                     }
                     "TYPE" => {
                         assert!(arr.len() == 2);
-                        let key = arr.get(1).unwrap().clone();
+                        let key = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         RedisCommand::Type(key)
+                    }
+                    "XADD" => {
+                        let stream_key = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        let entry_id = arr.get(2).unwrap().clone();
+                        let mut kvp = HashMap::new();
+                        for (k, v) in arr.into_iter().skip(3).tuples() {
+                            kvp.insert(k.into_bytes(), v);
+                        }
+                        RedisCommand::XAdd(stream_key, entry_id, kvp)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
@@ -301,7 +335,7 @@ impl RedisCommand {
     }
 }
 
-async fn alert(list_key: Arc<Value>, env: &mut futures::lock::MutexGuard<'_, Env>) {
+async fn alert(list_key: Arc<Bytes>, env: &mut futures::lock::MutexGuard<'_, Env>) {
     let Some(sender) = env.waitlist.get_mut(&list_key).and_then(|s| s.pop_front()) else {
         return;
     };
@@ -310,7 +344,7 @@ async fn alert(list_key: Arc<Value>, env: &mut futures::lock::MutexGuard<'_, Env
     };
     let items = Value::Array(
         [
-            Arc::as_ref(&list_key).clone(),
+            Value::BulkString(Arc::as_ref(&list_key).clone()),
             if arr.is_empty() {
                 return;
             } else {

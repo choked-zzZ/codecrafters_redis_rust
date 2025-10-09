@@ -13,3 +13,4 @@ tokio-util = { version = "0.7.16", features = [
   "codec",
 ] } # Decoder/Encoder/Framed Trait
 futures = "0.3.28" # SinkExt/StreamExt Trait
+itertools = "0.14.0"
