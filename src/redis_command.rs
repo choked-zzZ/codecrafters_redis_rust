@@ -11,7 +11,7 @@ use tokio::sync::oneshot;
 use tokio::time::timeout;
 use tokio_util::codec::Framed;
 
-use crate::resp_decoder::Stream;
+use crate::resp_decoder::{Stream, StreamID};
 use crate::{
     resp_decoder::{RespParser, Value},
     Env,
@@ -209,7 +209,12 @@ impl RedisCommand {
                     Entry::Occupied(mut map_entry) => {
                         let stream = map_entry.get_mut().as_stream_mut().unwrap();
                         let last = stream.last_key_value().unwrap().0;
-                        if stream_entry_key <= *last {
+                        if stream_entry_key == StreamID::default() {
+                            let err = Value::Error(
+                                "ERR The ID specified in XADD must be greater than 0-0".into(),
+                            );
+                            return framed.send(err).await;
+                        } else if stream_entry_key <= *last {
                             let err = Value::Error("ERR The ID specified in XADD is equal or smaller than the target stream top item".into());
                             return framed.send(err).await;
                         }

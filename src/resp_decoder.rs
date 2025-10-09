@@ -22,7 +22,7 @@ pub enum Value {
     Stream(Stream),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash, Default)]
 pub struct StreamID {
     pub ms_time: u64,
     pub seq_num: u64,
