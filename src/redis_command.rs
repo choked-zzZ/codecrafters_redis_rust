@@ -295,7 +295,7 @@ async fn alert(list_key: Arc<Value>, env: &mut futures::lock::MutexGuard<'_, Env
             if arr.is_empty() {
                 return;
             } else {
-                Value::Array(arr.drain(..1).collect())
+                arr.pop_front().unwrap()
             },
         ]
         .into(),
