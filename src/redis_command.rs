@@ -286,6 +286,9 @@ impl RedisCommand {
 }
 
 async fn alert(list_key: Arc<Value>, env: &mut futures::lock::MutexGuard<'_, Env>) {
+    let Some(sender) = env.waitlist.get_mut(&list_key).and_then(|s| s.pop_front()) else {
+        return;
+    };
     let Some(Value::Array(arr)) = env.map.get_mut(&list_key) else {
         unreachable!()
     };
@@ -300,9 +303,6 @@ async fn alert(list_key: Arc<Value>, env: &mut futures::lock::MutexGuard<'_, Env
         ]
         .into(),
     );
-    let Some(sender) = env.waitlist.get_mut(&list_key).and_then(|s| s.pop_front()) else {
-        return;
-    };
     sender.send(items).ok();
     eprintln!("send");
 }
