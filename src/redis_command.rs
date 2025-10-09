@@ -195,6 +195,7 @@ impl RedisCommand {
                     None => Value::String("none".into()),
                     Some(val) => match val {
                         Value::BulkString(_) => Value::String("string".into()),
+                        Value::Stream(_) => Value::String("stream".into()),
                         _ => todo!(),
                     },
                 };

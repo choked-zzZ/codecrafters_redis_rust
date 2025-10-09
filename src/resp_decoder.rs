@@ -34,7 +34,7 @@ impl Value {
     pub fn into_bytes(self) -> Bytes {
         match self {
             Value::BulkString(s) => s,
-            _ => todo!(),
+            _ => todo!("{self:?}"),
         }
     }
 
