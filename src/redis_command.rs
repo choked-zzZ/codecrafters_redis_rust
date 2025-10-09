@@ -259,21 +259,25 @@ impl RedisCommand {
                 let stream = env.map.get(&stream_key).unwrap().as_stream().unwrap();
                 let l_bound = StreamID::parse(id, true).unwrap();
                 let items = stream.range((Excluded(l_bound), Unbounded));
-                let mut arr = VecDeque::new();
-                for (stream_id, kvp) in items {
-                    let mut kvp_arr = VecDeque::new();
-                    kvp.iter().for_each(|(k, v)| {
-                        kvp_arr.push_back(Value::BulkString(k.clone()));
-                        kvp_arr.push_back(v.clone());
+                let mut entries = VecDeque::new();
+                for (stream_id, fields) in items {
+                    let mut fields_arr = VecDeque::new();
+                    fields.iter().for_each(|(k, v)| {
+                        fields_arr.push_back(Value::BulkString(k.clone()));
+                        fields_arr.push_back(v.clone());
                     });
-                    let kvp_arr = Value::Array(kvp_arr);
+                    let fields_arr = Value::Array(fields_arr);
                     let stream_entry = Value::Array(VecDeque::from([
                         stream_id.as_bulk_string().clone(),
-                        kvp_arr,
+                        fields_arr,
                     ]));
-                    arr.push_back(stream_entry);
+                    entries.push_back(stream_entry);
                 }
-                framed.send(&Value::Array(arr)).await
+                let inner_arr = Value::Array(entries);
+                let single_stream =
+                    Value::Array(VecDeque::from([Value::BulkString(stream_key), inner_arr]));
+                let streams = Value::Array(VecDeque::from([single_stream]));
+                framed.send(&streams).await
             }
         }
     }
