@@ -1,5 +1,6 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};
+use std::ops::Bound::{Excluded, Unbounded};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -32,6 +33,7 @@ pub enum RedisCommand {
     Type(Bytes),
     XAdd(Bytes, Value, HashMap<Bytes, Value>),
     XRange(Bytes, Value, Value),
+    XRead(Bytes, Value),
 }
 
 impl RedisCommand {
@@ -252,6 +254,27 @@ impl RedisCommand {
                 }
                 framed.send(&Value::Array(arr)).await
             }
+            RedisCommand::XRead(stream_key, id) => {
+                let env = env.lock().await;
+                let stream = env.map.get(&stream_key).unwrap().as_stream().unwrap();
+                let l_bound = StreamID::parse(id, true).unwrap();
+                let items = stream.range((Excluded(l_bound), Unbounded));
+                let mut arr = VecDeque::new();
+                for (stream_id, kvp) in items {
+                    let mut kvp_arr = VecDeque::new();
+                    kvp.iter().for_each(|(k, v)| {
+                        kvp_arr.push_back(Value::BulkString(k.clone()));
+                        kvp_arr.push_back(v.clone());
+                    });
+                    let kvp_arr = Value::Array(kvp_arr);
+                    let stream_entry = Value::Array(VecDeque::from([
+                        stream_id.as_bulk_string().clone(),
+                        kvp_arr,
+                    ]));
+                    arr.push_back(stream_entry);
+                }
+                framed.send(&Value::Array(arr)).await
+            }
         }
     }
     pub fn parse_command(value: Value) -> RedisCommand {
@@ -364,6 +387,13 @@ impl RedisCommand {
                         let left = arr.get(2).unwrap().clone();
                         let right = arr.get(3).unwrap().clone();
                         RedisCommand::XRange(stream_key, left, right)
+                    }
+                    "XREAD" => {
+                        let mode = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        assert_eq!(mode, "STREAMS");
+                        let key = arr.get(2).unwrap().as_bulk_string().unwrap().clone();
+                        let id = arr.get(3).unwrap().clone();
+                        RedisCommand::XRead(key, id)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
