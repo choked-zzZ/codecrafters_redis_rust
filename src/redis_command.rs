@@ -1,5 +1,5 @@
 use std::collections::hash_map::Entry;
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -31,6 +31,7 @@ pub enum RedisCommand {
     BLPop(Bytes, f64),
     Type(Bytes),
     XAdd(Bytes, Value, HashMap<Bytes, Value>),
+    XRange(Bytes, Value, Value),
 }
 
 impl RedisCommand {
@@ -42,9 +43,9 @@ impl RedisCommand {
         match self {
             RedisCommand::Ping => {
                 let response = Value::String("PONG".into());
-                framed.send(response).await
+                framed.send(&response).await
             }
-            RedisCommand::Echo(msg) => framed.send(msg).await,
+            RedisCommand::Echo(ref msg) => framed.send(msg).await,
             RedisCommand::Set(k, v, time) => {
                 let mut env = env.lock().await;
                 let k = Arc::new(k);
@@ -52,20 +53,20 @@ impl RedisCommand {
                     env.expiry.insert(k.clone(), time);
                 }
                 env.map.insert(k, v);
-                framed.send(Value::String("OK".into())).await
+                framed.send(&Value::String("OK".into())).await
             }
             RedisCommand::Get(k) => {
                 let env = env.lock().await;
                 let item = match (env.map.get(&k), env.expiry.get(&k)) {
-                    (None, _) => Value::NullBulkString,
-                    (Some(val), None) => val.clone(),
+                    (None, _) => &Value::NullBulkString,
+                    (Some(val), None) => val,
                     (Some(val), Some(expire_time)) => {
                         let now = SystemTime::now();
                         eprintln!("now: {now:?}, expire_time: {expire_time:?}");
                         if *expire_time < now {
-                            Value::NullBulkString
+                            &Value::NullBulkString
                         } else {
-                            val.clone()
+                            val
                         }
                     }
                 };
@@ -90,12 +91,12 @@ impl RedisCommand {
                     }
                 } as _;
                 alert(list_key, &mut env).await;
-                framed.send(Value::Integer(len)).await
+                framed.send(&Value::Integer(len)).await
             }
             RedisCommand::LRange(list_key, l, r) => {
                 let env = env.lock().await;
                 let Some(Value::Array(arr)) = &env.map.get(&list_key) else {
-                    return framed.send(Value::Array(VecDeque::new())).await;
+                    return framed.send(&Value::Array(VecDeque::new())).await;
                 };
                 let len = arr.len();
                 let l = if l >= 0 {
@@ -109,10 +110,10 @@ impl RedisCommand {
                     len.checked_add_signed(r).unwrap_or(0)
                 };
                 if l >= len || l > r {
-                    return framed.send(Value::Array(VecDeque::new())).await;
+                    return framed.send(&Value::Array(VecDeque::new())).await;
                 }
                 #[allow(clippy::map_clone)]
-                let slice = Value::Array(arr.range(l..=r).map(|x| x.clone()).collect());
+                let slice = &Value::Array(arr.range(l..=r).map(|x| x.clone()).collect());
                 framed.send(slice).await
             }
             RedisCommand::LPush(list_key, items) => {
@@ -134,7 +135,7 @@ impl RedisCommand {
                     }
                 } as _;
                 alert(list_key, &mut env).await;
-                framed.send(Value::Integer(len)).await
+                framed.send(&Value::Integer(len)).await
             }
             RedisCommand::LLen(list_key) => {
                 let env = env.lock().await;
@@ -143,11 +144,11 @@ impl RedisCommand {
                     .get(&list_key)
                     .map(|arr| arr.as_array().unwrap().len())
                     .unwrap_or(0) as i64;
-                framed.send(Value::Integer(len)).await
+                framed.send(&Value::Integer(len)).await
             }
             RedisCommand::LPop(list_key) => {
                 let mut env = env.lock().await;
-                let item = env
+                let item = &env
                     .map
                     .get_mut(&list_key)
                     .map(|arr| arr.as_array_mut().unwrap())
@@ -157,7 +158,7 @@ impl RedisCommand {
             }
             RedisCommand::LPopMany(list_key, remove_size) => {
                 let mut env = env.lock().await;
-                let item = env
+                let item = &env
                     .map
                     .get_mut(&list_key)
                     .map(|arr| arr.as_array_mut().unwrap())
@@ -167,7 +168,7 @@ impl RedisCommand {
             }
             RedisCommand::BLPop(list_key, timeout_limit) => {
                 if let Some(Value::Array(arr)) = env.lock().await.map.get_mut(&list_key) {
-                    if let Some(val) = arr.pop_front() {
+                    if let Some(ref val) = arr.pop_front() {
                         return framed.send(val).await;
                     }
                 }
@@ -178,7 +179,7 @@ impl RedisCommand {
                     .entry(Arc::new(list_key))
                     .or_default()
                     .push_back(tx);
-                let item = if timeout_limit != 0f64 {
+                let item = &if timeout_limit != 0f64 {
                     timeout(Duration::from_secs_f64(timeout_limit), rx)
                         .await
                         .map(|x| x.expect("Call receiver after all the sender has been droped."))
@@ -191,7 +192,7 @@ impl RedisCommand {
                 framed.send(item).await
             }
             RedisCommand::Type(key) => {
-                let response = match env.lock().await.map.get(&key) {
+                let response = &match env.lock().await.map.get(&key) {
                     None => Value::String("none".into()),
                     Some(val) => match val {
                         Value::BulkString(_) => Value::String("string".into()),
@@ -213,10 +214,10 @@ impl RedisCommand {
                             let err = Value::Error(
                                 "ERR The ID specified in XADD must be greater than 0-0".into(),
                             );
-                            return framed.send(err).await;
+                            return framed.send(&err).await;
                         } else if stream_entry_key <= *last {
                             let err = Value::Error("ERR The ID specified in XADD is equal or smaller than the target stream top item".into());
-                            return framed.send(err).await;
+                            return framed.send(&err).await;
                         }
                         stream.insert(stream_entry_key, kvp);
                     }
@@ -227,7 +228,29 @@ impl RedisCommand {
                         map_entry.insert(Value::Stream(stream));
                     }
                 }
-                framed.send(stream_entry_id).await
+                framed.send(&stream_entry_id).await
+            }
+            RedisCommand::XRange(stream_key, left, right) => {
+                let l_bound = StreamID::parse(left, true).unwrap();
+                let r_bound = StreamID::parse(right, false).unwrap();
+                let env = env.lock().await;
+                let stream = env.map.get(&stream_key).unwrap().as_stream().unwrap();
+                let items = stream.range(l_bound..=r_bound);
+                let mut arr = VecDeque::new();
+                for (stream_id, kvp) in items {
+                    let mut kvp_arr = VecDeque::new();
+                    kvp.iter().for_each(|(k, v)| {
+                        kvp_arr.push_back(Value::BulkString(k.clone()));
+                        kvp_arr.push_back(v.clone());
+                    });
+                    let kvp_arr = Value::Array(kvp_arr);
+                    let stream_entry = Value::Array(VecDeque::from([
+                        stream_id.as_bulk_string().clone(),
+                        kvp_arr,
+                    ]));
+                    arr.push_back(stream_entry);
+                }
+                framed.send(&Value::Array(arr)).await
             }
         }
     }
@@ -335,6 +358,12 @@ impl RedisCommand {
                             kvp.insert(k.into_bytes(), v);
                         }
                         RedisCommand::XAdd(stream_key, entry_id, kvp)
+                    }
+                    "XRANGE" => {
+                        let stream_key = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        let left = arr.get(2).unwrap().clone();
+                        let right = arr.get(3).unwrap().clone();
+                        RedisCommand::XRange(stream_key, left, right)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
