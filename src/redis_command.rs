@@ -33,7 +33,7 @@ pub enum RedisCommand {
     Type(Bytes),
     XAdd(Bytes, Value, HashMap<Bytes, Value>),
     XRange(Bytes, Value, Value),
-    XRead(Bytes, Value),
+    XRead(Vec<Bytes>, Vec<Value>),
 }
 
 impl RedisCommand {
@@ -254,30 +254,33 @@ impl RedisCommand {
                 }
                 framed.send(&Value::Array(arr)).await
             }
-            RedisCommand::XRead(stream_key, id) => {
+            RedisCommand::XRead(stream_keys, ids) => {
                 let env = env.lock().await;
-                let stream = env.map.get(&stream_key).unwrap().as_stream().unwrap();
-                let l_bound = StreamID::parse(id, true).unwrap();
-                let items = stream.range((Excluded(l_bound), Unbounded));
-                let mut entries = VecDeque::new();
-                for (stream_id, fields) in items {
-                    let mut fields_arr = VecDeque::new();
-                    fields.iter().for_each(|(k, v)| {
-                        fields_arr.push_back(Value::BulkString(k.clone()));
-                        fields_arr.push_back(v.clone());
-                    });
-                    let fields_arr = Value::Array(fields_arr);
-                    let stream_entry = Value::Array(VecDeque::from([
-                        stream_id.as_bulk_string().clone(),
-                        fields_arr,
-                    ]));
-                    entries.push_back(stream_entry);
+                let mut streams = VecDeque::new();
+                for (stream_key, id) in stream_keys.into_iter().zip(ids.into_iter()) {
+                    let stream = env.map.get(&stream_key).unwrap().as_stream().unwrap();
+                    let l_bound = StreamID::parse(id, true).unwrap();
+                    let items = stream.range((Excluded(l_bound), Unbounded));
+                    let mut entries = VecDeque::new();
+                    for (stream_id, fields) in items {
+                        let mut fields_arr = VecDeque::new();
+                        fields.iter().for_each(|(k, v)| {
+                            fields_arr.push_back(Value::BulkString(k.clone()));
+                            fields_arr.push_back(v.clone());
+                        });
+                        let fields_arr = Value::Array(fields_arr);
+                        let stream_entry = Value::Array(VecDeque::from([
+                            stream_id.as_bulk_string().clone(),
+                            fields_arr,
+                        ]));
+                        entries.push_back(stream_entry);
+                    }
+                    let inner_arr = Value::Array(entries);
+                    let single_stream =
+                        Value::Array(VecDeque::from([Value::BulkString(stream_key), inner_arr]));
+                    streams.push_back(single_stream);
                 }
-                let inner_arr = Value::Array(entries);
-                let single_stream =
-                    Value::Array(VecDeque::from([Value::BulkString(stream_key), inner_arr]));
-                let streams = Value::Array(VecDeque::from([single_stream]));
-                framed.send(&streams).await
+                framed.send(&Value::Array(streams)).await
             }
         }
     }
@@ -395,8 +398,14 @@ impl RedisCommand {
                     "XREAD" => {
                         let mode = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         // assert_eq!(mode, "STREAMS");
-                        let key = arr.get(2).unwrap().as_bulk_string().unwrap().clone();
-                        let id = arr.get(3).unwrap().clone();
+                        let streams_count = arr.len() / 2 - 1;
+                        let key = arr
+                            .iter()
+                            .skip(2)
+                            .take(streams_count)
+                            .map(|x| x.as_bulk_string().unwrap().clone())
+                            .collect();
+                        let id = arr.into_iter().skip(2 + streams_count).collect();
                         RedisCommand::XRead(key, id)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
