@@ -83,7 +83,7 @@ impl RedisCommand {
                         len
                     }
                 } as _;
-                alert(list_key, &mut env);
+                alert(list_key, &mut env).await;
                 framed.send(Value::Integer(len)).await
             }
             RedisCommand::LRange(list_key, l, r) => {
@@ -127,7 +127,7 @@ impl RedisCommand {
                         len
                     }
                 } as _;
-                alert(list_key, &mut env);
+                alert(list_key, &mut env).await;
                 framed.send(Value::Integer(len)).await
             }
             RedisCommand::LLen(list_key) => {
@@ -297,8 +297,6 @@ async fn alert(list_key: Arc<Value>, env: &mut futures::lock::MutexGuard<'_, Env
     let Some(sender) = env.waitlist.get_mut(&list_key).and_then(|s| s.pop_front()) else {
         return;
     };
-    sender
-        // SAFETY: Has already been checked.
-        .send(item)
-        .ok();
+    sender.send(item).ok();
+    eprintln!("send");
 }
