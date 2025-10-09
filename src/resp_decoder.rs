@@ -118,7 +118,7 @@ impl Value {
             let f = str::from_utf8(&s[..idx]).unwrap().parse().unwrap();
             if f != last.ms_time {
                 last.ms_time = f;
-                last.seq_num = -1;
+                last.seq_num = if last.ms_time == 0 { 0 } else { -1 };
             }
             if let Ok(s) = str::from_utf8(&s[idx + 1..]).unwrap().parse() {
                 last.seq_num = s;
