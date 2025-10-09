@@ -29,6 +29,16 @@ pub struct StreamID {
     pub seq_num: u64,
 }
 
+const MIN_STREAM_ID: StreamID = StreamID {
+    ms_time: 0,
+    seq_num: 1,
+};
+
+const MAX_STREAM_ID: StreamID = StreamID {
+    ms_time: u128::MAX,
+    seq_num: u64::MAX,
+};
+
 impl Default for StreamID {
     fn default() -> Self {
         Self {
@@ -48,6 +58,12 @@ impl StreamID {
 
     pub fn parse(val: Value, is_left_boundary: bool) -> Option<Self> {
         let val = val.as_bulk_string().unwrap();
+        if is_left_boundary && *val == "-" {
+            return Some(MIN_STREAM_ID);
+        }
+        if !is_left_boundary && *val == "+" {
+            return Some(MAX_STREAM_ID);
+        }
         match memchr(b'-', val) {
             None => {
                 let f = str::from_utf8(val).unwrap().parse().ok()?;
