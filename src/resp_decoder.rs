@@ -108,7 +108,7 @@ impl Value {
     }
 
     pub fn as_entry_id(
-        &self,
+        &mut self,
         stream: &mut BTreeMap<StreamID, HashMap<Bytes, Value>>,
     ) -> Option<StreamID> {
         let s = self.as_bulk_string()?;
@@ -122,6 +122,7 @@ impl Value {
                 last.seq_num += 1;
             }
         };
+        *self = Value::BulkString(format!("{}-{}", last.ms_time, last.seq_num).into());
         Some(last)
     }
 }

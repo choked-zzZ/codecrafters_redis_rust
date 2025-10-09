@@ -201,7 +201,7 @@ impl RedisCommand {
                 };
                 framed.send(response).await
             }
-            RedisCommand::XAdd(stream_key, stream_entry_id, kvp) => {
+            RedisCommand::XAdd(stream_key, mut stream_entry_id, kvp) => {
                 let mut env = env.lock().await;
                 let stream_key = Arc::new(stream_key);
                 match env.map.entry(Arc::clone(&stream_key)) {
