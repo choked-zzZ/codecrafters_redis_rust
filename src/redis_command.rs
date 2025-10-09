@@ -25,6 +25,7 @@ pub enum RedisCommand {
     LPop(Value),
     LPopMany(Value, usize),
     BLPop(Value, f64),
+    Type(Value),
 }
 
 impl RedisCommand {
@@ -184,6 +185,16 @@ impl RedisCommand {
                 eprintln!("get item {item:?}");
                 framed.send(item).await
             }
+            RedisCommand::Type(key) => {
+                let response = match env.lock().await.map.get(&key) {
+                    None => Value::String("none".into()),
+                    Some(val) => match val {
+                        Value::BulkString(_) => Value::String("string".into()),
+                        _ => todo!(),
+                    },
+                };
+                framed.send(response).await
+            }
         }
     }
     pub fn parse_command(value: Value) -> RedisCommand {
@@ -276,6 +287,11 @@ impl RedisCommand {
                         let list_key = arr.get(1).unwrap().clone();
                         let timeout = arr.get(2).unwrap().as_float().unwrap() as f64;
                         RedisCommand::BLPop(list_key, timeout)
+                    }
+                    "TYPE" => {
+                        assert!(arr.len() == 2);
+                        let key = arr.get(1).unwrap().clone();
+                        RedisCommand::Type(key)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
