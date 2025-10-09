@@ -204,12 +204,12 @@ impl RedisCommand {
             RedisCommand::XAdd(stream_key, stream_entry_id, kvp) => {
                 let mut env = env.lock().await;
                 let stream_key = Arc::new(stream_key);
-                let stream_entry_key = stream_entry_id.as_entry_id().unwrap();
                 match env.map.entry(Arc::clone(&stream_key)) {
                     Entry::Occupied(mut map_entry) => {
                         let stream = map_entry.get_mut().as_stream_mut().unwrap();
+                        let stream_entry_key = stream_entry_id.as_entry_id(stream).unwrap();
                         let last = stream.last_key_value().unwrap().0;
-                        if stream_entry_key == StreamID::default() {
+                        if stream_entry_key.is_invalid() {
                             let err = Value::Error(
                                 "ERR The ID specified in XADD must be greater than 0-0".into(),
                             );
@@ -222,6 +222,7 @@ impl RedisCommand {
                     }
                     Entry::Vacant(map_entry) => {
                         let mut stream = Stream::new();
+                        let stream_entry_key = stream_entry_id.as_entry_id(&mut stream).unwrap();
                         stream.insert(stream_entry_key, kvp);
                         map_entry.insert(Value::Stream(stream));
                     }

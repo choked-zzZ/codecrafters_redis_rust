@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
     io,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use bytes::{Bytes, BytesMut};
@@ -22,10 +23,28 @@ pub enum Value {
     Stream(Stream),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
 pub struct StreamID {
-    pub ms_time: u64,
-    pub seq_num: u64,
+    pub ms_time: u128,
+    pub seq_num: i64,
+}
+
+impl Default for StreamID {
+    fn default() -> Self {
+        Self {
+            ms_time: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis(),
+            seq_num: 0,
+        }
+    }
+}
+
+impl StreamID {
+    pub fn is_invalid(&self) -> bool {
+        self.ms_time == 0 && self.seq_num == 0
+    }
 }
 
 pub type Stream = BTreeMap<StreamID, HashMap<Bytes, Value>>;
@@ -88,17 +107,22 @@ impl Value {
         }
     }
 
-    pub fn as_entry_id(&self) -> Option<StreamID> {
-        match self {
-            Value::BulkString(s) => {
-                let idx = memchr(b'-', s)?;
-                Some(StreamID {
-                    ms_time: str::from_utf8(&s[..idx]).unwrap().parse().unwrap(),
-                    seq_num: str::from_utf8(&s[idx + 1..]).unwrap().parse().unwrap(),
-                })
+    pub fn as_entry_id(
+        &self,
+        stream: &mut BTreeMap<StreamID, HashMap<Bytes, Value>>,
+    ) -> Option<StreamID> {
+        let s = self.as_bulk_string()?;
+        let mut last = stream.last_key_value().map(|x| *x.0).unwrap_or_default();
+        if let Some(idx) = memchr(b'-', s) {
+            let f = str::from_utf8(&s[..idx]).unwrap().parse().unwrap();
+            last.ms_time = f;
+            if let Ok(s) = str::from_utf8(&s[idx + 1..]).unwrap().parse() {
+                last.seq_num = s;
+            } else {
+                last.seq_num += 1;
             }
-            _ => None,
-        }
+        };
+        Some(last)
     }
 }
 
