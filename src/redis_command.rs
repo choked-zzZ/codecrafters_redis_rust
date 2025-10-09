@@ -181,6 +181,7 @@ impl RedisCommand {
                     rx.await
                         .expect("Call the receiver after all the sender has been droped.")
                 };
+                eprintln!("get item {item}");
                 framed.send(item).await
             }
         }
