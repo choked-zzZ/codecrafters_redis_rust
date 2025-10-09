@@ -33,7 +33,7 @@ pub type Stream = BTreeMap<StreamID, HashMap<Bytes, Value>>;
 impl Value {
     pub fn into_bytes(self) -> Bytes {
         match self {
-            Value::String(s) => s,
+            Value::BulkString(s) => s,
             _ => todo!(),
         }
     }
