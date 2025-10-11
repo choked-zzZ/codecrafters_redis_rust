@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use futures::lock::Mutex;
+use futures::SinkExt;
 use futures::StreamExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
@@ -20,10 +21,8 @@ async fn connection_handler(stream: TcpStream, env: Arc<Mutex<Env>>) {
         match result {
             Ok(value) => {
                 eprintln!("recieved: {value:?}");
-                if let Err(e) = RedisCommand::parse_command(value)
-                    .exec(&mut framed, env.clone())
-                    .await
-                {
+                let response = RedisCommand::parse_command(value).exec(env.clone()).await;
+                if let Err(e) = framed.send(&response).await {
                     eprintln!("carsh into error: {e}");
                     break;
                 }
