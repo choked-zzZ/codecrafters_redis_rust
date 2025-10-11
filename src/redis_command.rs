@@ -76,6 +76,11 @@ impl RedisCommand {
                         }
                     }
                 };
+                let item = match item {
+                    val @ Value::BulkString(_) => val,
+                    Value::Integer(i) => &Value::BulkString(i.to_string().into()),
+                    _ => todo!(),
+                };
                 framed.send(item).await
             }
             RedisCommand::RPush(list_key, mut items) => {
@@ -357,16 +362,22 @@ impl RedisCommand {
             }
             RedisCommand::Incr(key) => {
                 let mut env = env.lock().await;
-                let number = env
-                    .map
-                    .entry(Arc::new(key))
-                    .and_modify(|x| {
-                        x.incr();
-                    })
-                    .or_insert(Value::BulkString("1".into()));
-                let response = Value::Integer(number.as_integer().unwrap());
-
-                framed.send(&response).await
+                match env.map.entry(Arc::new(key)) {
+                    Entry::Occupied(mut entry) => match entry.get_mut().incr() {
+                        Ok(_) => framed.send(entry.get()).await,
+                        Err(_) => {
+                            framed
+                                .send(&Value::Error(
+                                    "ERR value is not an integer or out of range".into(),
+                                ))
+                                .await
+                        }
+                    },
+                    Entry::Vacant(entry) => {
+                        entry.insert(Value::Integer(1));
+                        framed.send(&Value::Integer(1)).await
+                    }
+                }
             }
         }
     }

@@ -128,6 +128,7 @@ impl Value {
             _ => None,
         }
     }
+
     pub fn as_bulk_string(&self) -> Option<&Bytes> {
         match self {
             Value::BulkString(s) => Some(s),
@@ -143,19 +144,22 @@ impl Value {
         }
     }
 
-    pub fn incr(&mut self) -> Option<i64> {
+    pub fn incr(&mut self) -> Result<(), ()> {
         match self {
             Value::Integer(i) => {
-                *i = i.checked_add(1)?;
-                Some(*i)
+                *i = i.checked_add(1).ok_or(())?;
+                Ok(())
             }
             Value::BulkString(s) => {
-                let mut i = str::from_utf8(s).ok().and_then(|s| s.parse::<i64>().ok())?;
-                i = i.checked_add(1)?;
-                *self = Value::BulkString(Bytes::from(i.to_string()));
-                Some(i)
+                let mut i = str::from_utf8(s)
+                    .map_err(|_| ())?
+                    .parse::<i64>()
+                    .map_err(|_| ())?;
+                i = i.checked_add(1).ok_or(())?;
+                *self = Value::Integer(i);
+                Ok(())
             }
-            _ => None,
+            _ => Err(()),
         }
     }
 
