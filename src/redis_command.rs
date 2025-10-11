@@ -458,7 +458,7 @@ impl RedisCommand {
                                 RedisCommand::BXRead(key, block_milisec, id)
                             }
                             _ => {
-                                panic!("Unknown command of XREAD.")
+                                panic!("{mode}: Unknown command of XREAD.")
                             }
                         }
                     }
