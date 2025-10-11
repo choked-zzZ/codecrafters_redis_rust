@@ -307,12 +307,13 @@ impl RedisCommand {
                                 .expect("Call receiver after all the sender has been droped.")
                         } else {
                             eprintln!("wait {block_milisec} ms");
-                            timeout(Duration::from_millis(block_milisec), rx)
-                                .await
-                                .map(|x| {
-                                    x.expect("Call receiver after all the sender has been droped.")
-                                })
-                                .unwrap_or(Value::NullArray)
+                            rx.await.expect("failed")
+                            // timeout(Duration::from_millis(block_milisec), rx)
+                            //     .await
+                            //     .map(|x| {
+                            //         x.expect("Call receiver after all the sender has been droped.")
+                            //     })
+                            //     .unwrap_or(Value::NullArray)
                         };
                         eprintln!("got a single stream {single_stream:?}");
                         streams.push_back(single_stream);
