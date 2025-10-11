@@ -513,6 +513,7 @@ fn time_now() {
 }
 
 async fn stream_update_alert(stream_key: Arc<Bytes>, env: &mut futures::lock::MutexGuard<'_, Env>) {
+    time_now();
     let Some(WaitFor::Stream(l_bound, sender)) = env
         .waitlist
         .get_mut(&stream_key)
