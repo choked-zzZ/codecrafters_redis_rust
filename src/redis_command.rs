@@ -444,7 +444,7 @@ impl RedisCommand {
                                 let id = arr.into_iter().skip(2 + streams_count).collect();
                                 RedisCommand::XRead(key, id)
                             }
-                            "BLOCKS" => {
+                            "BLOCK" => {
                                 let block_milisec =
                                     arr.get(2).unwrap().as_integer().unwrap() as u64;
                                 let streams_count = arr.len() / 2 - 3;
