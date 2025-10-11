@@ -152,7 +152,7 @@ impl Value {
             Value::BulkString(s) => {
                 let mut i = str::from_utf8(s).ok().and_then(|s| s.parse::<i64>().ok())?;
                 i = i.checked_add(1)?;
-                *self = Value::Integer(i);
+                *self = Value::BulkString(Bytes::from(i.to_string()));
                 Some(i)
             }
             _ => None,
