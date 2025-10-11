@@ -239,8 +239,8 @@ impl RedisCommand {
                 framed.send(&stream_entry_id).await
             }
             RedisCommand::XRange(stream_key, left, right) => {
-                let l_bound = StreamID::parse(left, true).unwrap();
-                let r_bound = StreamID::parse(right, false).unwrap();
+                let l_bound = StreamID::parse(left, true, &None).unwrap();
+                let r_bound = StreamID::parse(right, false, &None).unwrap();
                 let env = env.lock().await;
                 let stream = env.map.get(&stream_key).unwrap().as_stream().unwrap();
                 let items = stream.range(l_bound..=r_bound);
@@ -265,7 +265,7 @@ impl RedisCommand {
                 let mut streams = VecDeque::new();
                 for (stream_key, id) in stream_keys.into_iter().zip(ids.into_iter()) {
                     let stream = env.map.get(&stream_key).unwrap().as_stream().unwrap();
-                    let l_bound = StreamID::parse(id, true).unwrap();
+                    let l_bound = StreamID::parse(id, true, &None).unwrap();
                     let items = stream.range((Excluded(l_bound), Unbounded));
                     let mut entries = VecDeque::new();
                     for (stream_id, fields) in items {
@@ -293,7 +293,7 @@ impl RedisCommand {
                 for (stream_key, id) in stream_keys.into_iter().zip(ids.into_iter()) {
                     let mut env = env.lock().await;
                     let stream = env.map.get(&stream_key).map(|x| x.as_stream().unwrap());
-                    let l_bound = StreamID::parse(id, true).unwrap();
+                    let l_bound = StreamID::parse(id, true, &stream).unwrap();
                     let mut items =
                         stream.map(|x| x.range((Excluded(l_bound), Unbounded)).peekable());
                     if items.as_mut().is_none_or(|x| x.peek().is_none()) {

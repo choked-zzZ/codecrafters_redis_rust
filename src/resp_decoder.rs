@@ -56,10 +56,18 @@ impl StreamID {
         self.ms_time == 0 && self.seq_num == 0
     }
 
-    pub fn parse(val: Value, is_left_boundary: bool) -> Option<Self> {
+    pub fn parse(val: Value, is_left_boundary: bool, stream: &Option<&Stream>) -> Option<Self> {
         let val = val.as_bulk_string().unwrap();
         if is_left_boundary && *val == "-" {
             return Some(MIN_STREAM_ID);
+        }
+        if is_left_boundary && *val == "$" {
+            let stream = stream.unwrap();
+            let last = stream
+                .last_key_value()
+                .map(|x| x.0.clone())
+                .unwrap_or(MIN_STREAM_ID);
+            return Some(last);
         }
         if !is_left_boundary && *val == "+" {
             return Some(MAX_STREAM_ID);
