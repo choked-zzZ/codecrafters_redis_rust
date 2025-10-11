@@ -295,18 +295,15 @@ impl RedisCommand {
                     let mut items =
                         stream.map(|x| x.range((Excluded(l_bound), Unbounded)).peekable());
                     if items.as_mut().is_none_or(|x| x.peek().is_none()) {
-                        eprintln!("no stream or content.");
                         let (tx, rx) = oneshot::channel();
                         env.waitlist
                             .entry(Arc::new(stream_key))
                             .or_default()
                             .push_back(WaitFor::Stream(l_bound, tx));
                         let single_stream = if block_milisec == 0 {
-                            eprintln!("forever");
                             rx.await
                                 .expect("Call receiver after all the sender has been droped.")
                         } else {
-                            eprintln!("wait {block_milisec} ms");
                             timeout(Duration::from_millis(block_milisec), rx)
                                 .await
                                 .map(|x| {
@@ -483,7 +480,6 @@ impl RedisCommand {
                                     .map(|x| x.as_bulk_string().unwrap().clone())
                                     .collect();
                                 let id = arr.into_iter().skip(4 + streams_count).collect();
-                                eprintln!("{block_milisec} and {key:?} and {id:?}");
                                 RedisCommand::BXRead(key, block_milisec, id)
                             }
                             _ => {
@@ -533,7 +529,6 @@ async fn stream_update_alert(stream_key: Arc<Bytes>, env: &mut futures::lock::Mu
             .into(),
         )
     };
-    eprintln!("ready to send: {single_stream:?}");
     sender.send(single_stream).ok();
     eprintln!("sent");
 }
@@ -558,5 +553,5 @@ async fn list_update_alert(list_key: Arc<Bytes>, env: &mut futures::lock::MutexG
         .into(),
     );
     sender.send(items).ok();
-    eprintln!("send");
+    eprintln!("sent");
 }
