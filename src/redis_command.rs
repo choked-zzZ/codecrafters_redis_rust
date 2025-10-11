@@ -506,6 +506,7 @@ async fn stream_update_alert(stream_key: Arc<Bytes>, env: &mut futures::lock::Mu
         .get_mut(&stream_key)
         .and_then(|s| s.pop_front())
     else {
+        eprintln!("nothing in the waitlist");
         return;
     };
     let Some(Value::Stream(stream)) = env.map.get_mut(&stream_key) else {
@@ -513,6 +514,7 @@ async fn stream_update_alert(stream_key: Arc<Bytes>, env: &mut futures::lock::Mu
     };
     let mut items = stream.range((Excluded(l_bound), Unbounded)).peekable();
     let single_stream = if items.peek().is_none() {
+        eprintln!("still no content available");
         return;
     } else {
         let mut arr = VecDeque::new();
