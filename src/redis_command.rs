@@ -79,7 +79,7 @@ impl RedisCommand {
                 let item = match item {
                     val @ Value::BulkString(_) => val,
                     Value::Integer(i) => &Value::BulkString(i.to_string().into()),
-                    _ => todo!(),
+                    val => todo!("{val:?}"),
                 };
                 framed.send(item).await
             }
