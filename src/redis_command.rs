@@ -1,6 +1,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
+use std::net::SocketAddr;
 use std::ops::Bound::{Excluded, Unbounded};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -41,10 +42,14 @@ pub enum RedisCommand {
 }
 
 impl RedisCommand {
-    pub fn exec(self, env: Arc<Mutex<Env>>) -> Pin<Box<dyn Future<Output = Value> + Send>> {
+    pub fn exec(
+        self,
+        env: Arc<Mutex<Env>>,
+        addr: SocketAddr,
+    ) -> Pin<Box<dyn Future<Output = Value> + Send>> {
         Box::pin(async move {
             if !matches!(self, RedisCommand::Exec) {
-                if let Some(transaction) = &mut env.lock().await.in_transaction {
+                if let Some(transaction) = env.lock().await.in_transaction.get_mut(&addr) {
                     transaction.push(self);
                     return Value::String("QUEUED".into());
                 }
@@ -371,19 +376,17 @@ impl RedisCommand {
                 }
                 RedisCommand::Multi => {
                     let mut env = env.lock().await;
-                    env.in_transaction = Some(Vec::new());
+                    env.in_transaction.insert(addr, Vec::new());
                     Value::String("OK".into())
                 }
                 RedisCommand::Exec => {
-                    let mut env_unlocked = env.lock().await;
-                    let transaction = mem::take(&mut env_unlocked.in_transaction);
-                    drop(env_unlocked);
+                    let transaction = env.lock().await.in_transaction.remove(&addr);
                     match transaction {
                         None => Value::Error("ERR EXEC without MULTI".into()),
                         Some(transaction) => {
                             let mut arr = VecDeque::new();
                             for command in transaction {
-                                arr.push_back(command.exec(env.clone()).await);
+                                arr.push_back(command.exec(env.clone(), addr).await);
                             }
                             Value::Array(arr)
                         }

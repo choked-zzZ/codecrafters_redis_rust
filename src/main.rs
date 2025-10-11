@@ -3,6 +3,7 @@ use std::sync::Arc;
 use futures::lock::Mutex;
 use futures::SinkExt;
 use futures::StreamExt;
+use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
 
@@ -14,14 +15,16 @@ mod env;
 mod redis_command;
 mod resp_decoder;
 
-async fn connection_handler(stream: TcpStream, env: Arc<Mutex<Env>>) {
+async fn connection_handler(stream: TcpStream, env: Arc<Mutex<Env>>, addr: SocketAddr) {
     let mut framed = Framed::new(stream, RespParser);
 
     while let Some(result) = framed.next().await {
         match result {
             Ok(value) => {
                 eprintln!("recieved: {value:?}");
-                let response = RedisCommand::parse_command(value).exec(env.clone()).await;
+                let response = RedisCommand::parse_command(value)
+                    .exec(env.clone(), addr)
+                    .await;
                 eprintln!("{response:?}");
                 if let Err(e) = framed.send(&response).await {
                     eprintln!("carsh into error: {e}");
@@ -50,7 +53,7 @@ async fn main() {
 
         let env = env.clone();
         tokio::spawn(async move {
-            connection_handler(stream, env).await;
+            connection_handler(stream, env, addr).await;
         });
     }
 }
