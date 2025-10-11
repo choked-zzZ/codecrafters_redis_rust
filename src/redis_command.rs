@@ -43,10 +43,9 @@ pub enum RedisCommand {
 impl RedisCommand {
     pub fn exec(self, env: Arc<Mutex<Env>>) -> Pin<Box<dyn Future<Output = Value> + Send>> {
         Box::pin(async move {
-            {
-                let mut env = env.lock().await;
-                if env.in_transaction.as_ref().is_some() && !matches!(self, RedisCommand::Exec) {
-                    env.in_transaction.as_mut().unwrap().push(self);
+            if !matches!(self, RedisCommand::Exec) {
+                if let Some(transaction) = &mut env.lock().await.in_transaction {
+                    transaction.push(self);
                     return Value::String("QUEUED".into());
                 }
             }
@@ -78,6 +77,7 @@ impl RedisCommand {
                             }
                         }
                     };
+                    eprintln!("get {item:?}");
                     match item {
                         val @ Value::BulkString(_) | val @ Value::NullBulkString => val.clone(),
                         Value::Integer(i) => Value::BulkString(i.to_string().into()),
