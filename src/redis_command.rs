@@ -295,15 +295,18 @@ impl RedisCommand {
                     let mut items =
                         stream.map(|x| x.range((Excluded(l_bound), Unbounded)).peekable());
                     if items.as_mut().is_none_or(|x| x.peek().is_none()) {
+                        eprintln!("no stream or content.");
                         let (tx, rx) = oneshot::channel();
                         env.waitlist
                             .entry(Arc::new(stream_key))
                             .or_default()
                             .push_back(WaitFor::Stream(l_bound, tx));
                         let single_stream = if block_milisec == 0 {
+                            eprintln!("forever");
                             rx.await
                                 .expect("Call receiver after all the sender has been droped.")
                         } else {
+                            eprintln!("wait {block_milisec} ms");
                             timeout(Duration::from_millis(block_milisec), rx)
                                 .await
                                 .map(|x| {
@@ -311,6 +314,7 @@ impl RedisCommand {
                                 })
                                 .unwrap_or(Value::NullArray)
                         };
+                        eprintln!("got a single stream {single_stream:?}");
                         streams.push_back(single_stream);
                     } else {
                         eprintln!("Contents detected. no block.");
