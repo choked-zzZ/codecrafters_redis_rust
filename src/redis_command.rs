@@ -472,7 +472,7 @@ impl RedisCommand {
                         let mode = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         let mode = str::from_utf8(&mode).unwrap().to_ascii_uppercase();
                         match mode.as_str() {
-                            "STREAM" => {
+                            "STREAMS" => {
                                 let streams_count = arr.len() / 2 - 1;
                                 let key = arr
                                     .iter()
