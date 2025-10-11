@@ -375,7 +375,7 @@ impl RedisCommand {
                     let transaction = mem::take(&mut env_unlocked.in_transaction);
                     drop(env_unlocked);
                     match transaction {
-                        None => Value::Error("ERR Exec without MULTI".into()),
+                        None => Value::Error("ERR EXEC without MULTI".into()),
                         Some(transaction) => {
                             let mut arr = VecDeque::new();
                             for command in transaction {
