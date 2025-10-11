@@ -475,7 +475,7 @@ impl RedisCommand {
                             "BLOCK" => {
                                 let block_milisec =
                                     arr.get(2).unwrap().as_integer().unwrap() as u64;
-                                let streams_count = arr.len() / 2 - 3;
+                                let streams_count = arr.len() / 2 - 2;
                                 let key = arr
                                     .iter()
                                     .skip(4)
