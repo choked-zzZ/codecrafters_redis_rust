@@ -383,6 +383,7 @@ impl RedisCommand {
                 RedisCommand::Exec => match env.lock().await.in_transaction.remove(&addr) {
                     None => Value::Error("ERR EXEC without MULTI".into()),
                     Some(transaction) => {
+                        eprintln!("Ready to exec");
                         let mut arr = VecDeque::new();
                         for command in transaction {
                             arr.push_back(command.exec(env.clone(), addr).await);
