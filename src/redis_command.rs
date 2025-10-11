@@ -386,8 +386,9 @@ impl RedisCommand {
                         eprintln!("Ready to exec");
                         let mut arr = VecDeque::new();
                         for command in transaction {
+                            eprintln!("ready to exec command {command:?}");
                             arr.push_back(command.exec(env.clone(), addr).await);
-                            eprintln!("Exec one");
+                            eprintln!("successfully execed.");
                         }
                         Value::Array(arr)
                     }
