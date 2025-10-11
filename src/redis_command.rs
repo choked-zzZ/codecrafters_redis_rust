@@ -391,7 +391,7 @@ impl RedisCommand {
                     }
                 },
                 RedisCommand::Discard => match env.lock().await.in_transaction.remove(&addr) {
-                    None => Value::Error("ERR DISCARD withou MULTI".into()),
+                    None => Value::Error("ERR DISCARD without MULTI".into()),
                     Some(_) => Value::String("OK".into()),
                 },
             }
