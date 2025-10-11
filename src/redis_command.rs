@@ -369,7 +369,11 @@ impl RedisCommand {
                         }
                     }
                 }
-                RedisCommand::Multi => Value::String("OK".into()),
+                RedisCommand::Multi => {
+                    let mut env = env.lock().await;
+                    env.in_transaction = Some(Vec::new());
+                    Value::String("OK".into())
+                }
                 RedisCommand::Exec => {
                     let mut env_unlocked = env.lock().await;
                     let transaction = mem::take(&mut env_unlocked.in_transaction);
