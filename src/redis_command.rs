@@ -311,7 +311,7 @@ impl RedisCommand {
                         } else {
                             eprintln!("wait {block_milisec} ms");
                             time_now();
-                            timeout(Duration::from_millis(block_milisec + 10000), rx)
+                            timeout(Duration::from_millis(block_milisec), rx)
                                 .await
                                 .map(|x| {
                                     x.expect("Call receiver after all the sender has been droped.")
