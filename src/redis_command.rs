@@ -357,8 +357,13 @@ impl RedisCommand {
             }
             RedisCommand::Incr(key) => {
                 let mut env = env.lock().await;
-                let number = env.map.get_mut(&key).unwrap();
-                number.incr();
+                let number = env
+                    .map
+                    .entry(Arc::new(key))
+                    .and_modify(|x| {
+                        x.incr();
+                    })
+                    .or_insert(Value::Integer(1));
                 let response = Value::Integer(number.as_integer().unwrap());
 
                 framed.send(&response).await
