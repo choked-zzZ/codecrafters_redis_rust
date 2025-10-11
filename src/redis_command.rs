@@ -304,7 +304,7 @@ impl RedisCommand {
                             rx.await
                                 .expect("Call receiver after all the sender has been droped.")
                         } else {
-                            timeout(Duration::from_millis(block_milisec), rx)
+                            timeout(Duration::from_millis(block_milisec + 100000), rx)
                                 .await
                                 .map(|x| {
                                     x.expect("Call receiver after all the sender has been droped.")
@@ -529,6 +529,7 @@ async fn stream_update_alert(stream_key: Arc<Bytes>, env: &mut futures::lock::Mu
             .into(),
         )
     };
+    eprintln!("ready to send: {single_stream:?}");
     sender.send(single_stream).ok();
     eprintln!("sent");
 }
@@ -553,5 +554,5 @@ async fn list_update_alert(list_key: Arc<Bytes>, env: &mut futures::lock::MutexG
         .into(),
     );
     sender.send(items).ok();
-    eprintln!("sent");
+    eprintln!("send");
 }
