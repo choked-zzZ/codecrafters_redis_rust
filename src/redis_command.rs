@@ -49,7 +49,7 @@ impl RedisCommand {
         addr: SocketAddr,
     ) -> Pin<Box<dyn Future<Output = Value> + Send>> {
         Box::pin(async move {
-            if !matches!(self, RedisCommand::Exec) {
+            if !matches!(self, RedisCommand::Exec | RedisCommand::Discard) {
                 if let Some(transaction) = env.lock().await.in_transaction.get_mut(&addr) {
                     transaction.push(self);
                     return Value::String("QUEUED".into());
