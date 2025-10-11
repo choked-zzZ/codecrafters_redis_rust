@@ -289,9 +289,9 @@ impl RedisCommand {
                 framed.send(&Value::Array(streams)).await
             }
             RedisCommand::BXRead(stream_keys, block_milisec, ids) => {
-                let mut env = env.lock().await;
                 let mut streams = VecDeque::new();
                 for (stream_key, id) in stream_keys.into_iter().zip(ids.into_iter()) {
+                    let mut env = env.lock().await;
                     let stream = env.map.get(&stream_key).map(|x| x.as_stream().unwrap());
                     let l_bound = StreamID::parse(id, true).unwrap();
                     let mut items =
@@ -303,6 +303,7 @@ impl RedisCommand {
                             .entry(Arc::new(stream_key))
                             .or_default()
                             .push_back(WaitFor::Stream(l_bound, tx));
+                        drop(env);
                         let single_stream = if block_milisec == 0 {
                             eprintln!("forever");
                             rx.await
