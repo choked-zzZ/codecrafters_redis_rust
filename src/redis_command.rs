@@ -40,6 +40,7 @@ pub enum RedisCommand {
     Multi,
     Exec,
     Discard,
+    Info(Bytes),
 }
 
 impl RedisCommand {
@@ -399,6 +400,17 @@ impl RedisCommand {
                     None => Value::Error("ERR DISCARD without MULTI".into()),
                     Some(_) => Value::String("OK".into()),
                 },
+                RedisCommand::Info(section) => {
+                    let section = str::from_utf8(&section).unwrap().to_ascii_uppercase();
+                    match section.as_str() {
+                        "REPLICATION" => Value::String(
+                            "# Replication
+                            role:master"
+                                .into(),
+                        ),
+                        _ => todo!(),
+                    }
+                }
             }
         })
     }
@@ -555,6 +567,10 @@ impl RedisCommand {
                     "MULTI" => RedisCommand::Multi,
                     "EXEC" => RedisCommand::Exec,
                     "DISCARD" => RedisCommand::Discard,
+                    "INFO" => {
+                        let section = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        RedisCommand::Info(section)
+                    }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
             }
