@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use std::ops::Bound::{Excluded, Unbounded};
 use std::panic;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bytes::Bytes;
 use futures::{lock::Mutex, SinkExt};
@@ -208,6 +208,7 @@ impl RedisCommand {
                 framed.send(response).await
             }
             RedisCommand::XAdd(stream_key, mut stream_entry_id, kvp) => {
+                time_now();
                 let mut env = env.lock().await;
                 let stream_key = Arc::new(stream_key);
                 match env.map.entry(Arc::clone(&stream_key)) {
@@ -307,6 +308,7 @@ impl RedisCommand {
                                 .expect("Call receiver after all the sender has been droped.")
                         } else {
                             eprintln!("wait {block_milisec} ms");
+                            time_now();
                             timeout(Duration::from_millis(block_milisec + 10000), rx)
                                 .await
                                 .map(|x| {
@@ -497,6 +499,16 @@ impl RedisCommand {
             _ => panic!("Unknown command"),
         }
     }
+}
+
+fn time_now() {
+    eprintln!(
+        "{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+    );
 }
 
 async fn stream_update_alert(stream_key: Arc<Bytes>, env: &mut futures::lock::MutexGuard<'_, Env>) {
