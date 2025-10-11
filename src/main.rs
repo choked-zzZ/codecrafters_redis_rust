@@ -22,6 +22,7 @@ async fn connection_handler(stream: TcpStream, env: Arc<Mutex<Env>>) {
             Ok(value) => {
                 eprintln!("recieved: {value:?}");
                 let response = RedisCommand::parse_command(value).exec(env.clone()).await;
+                eprintln!("{response:?}");
                 if let Err(e) = framed.send(&response).await {
                     eprintln!("carsh into error: {e}");
                     break;
