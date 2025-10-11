@@ -39,6 +39,7 @@ pub enum RedisCommand {
     Incr(Bytes),
     Multi,
     Exec,
+    Discard,
 }
 
 impl RedisCommand {
@@ -379,19 +380,20 @@ impl RedisCommand {
                     env.in_transaction.insert(addr, Vec::new());
                     Value::String("OK".into())
                 }
-                RedisCommand::Exec => {
-                    let transaction = env.lock().await.in_transaction.remove(&addr);
-                    match transaction {
-                        None => Value::Error("ERR EXEC without MULTI".into()),
-                        Some(transaction) => {
-                            let mut arr = VecDeque::new();
-                            for command in transaction {
-                                arr.push_back(command.exec(env.clone(), addr).await);
-                            }
-                            Value::Array(arr)
+                RedisCommand::Exec => match env.lock().await.in_transaction.remove(&addr) {
+                    None => Value::Error("ERR EXEC without MULTI".into()),
+                    Some(transaction) => {
+                        let mut arr = VecDeque::new();
+                        for command in transaction {
+                            arr.push_back(command.exec(env.clone(), addr).await);
                         }
+                        Value::Array(arr)
                     }
-                }
+                },
+                RedisCommand::Discard => match env.lock().await.in_transaction.remove(&addr) {
+                    None => Value::Error("ERR DISCARD withou MULTI".into()),
+                    Some(_) => Value::String("OK".into()),
+                },
             }
         })
     }
@@ -547,6 +549,7 @@ impl RedisCommand {
                     }
                     "MULTI" => RedisCommand::Multi,
                     "EXEC" => RedisCommand::Exec,
+                    "DISCARD" => RedisCommand::Discard,
                     _ => panic!("Unknown command or invalid arguments"),
                 }
             }
