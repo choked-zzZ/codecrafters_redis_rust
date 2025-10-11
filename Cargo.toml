@@ -14,3 +14,4 @@ tokio-util = { version = "0.7.16", features = [
 ] } # Decoder/Encoder/Framed Trait
 futures = "0.3.28" # SinkExt/StreamExt Trait
 itertools = "0.14.0"
+clap = { version = "4.5.48", features = ["derive"] }
