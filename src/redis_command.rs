@@ -528,8 +528,9 @@ async fn stream_update_alert(stream_key: Arc<Bytes>, env: &mut futures::lock::Mu
             .into(),
         )
     };
+    eprintln!("ready to send: {single_stream:?}");
     sender.send(single_stream).ok();
-    eprintln!("send");
+    eprintln!("sent");
 }
 
 async fn list_update_alert(list_key: Arc<Bytes>, env: &mut futures::lock::MutexGuard<'_, Env>) {
