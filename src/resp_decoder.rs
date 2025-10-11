@@ -143,6 +143,22 @@ impl Value {
         }
     }
 
+    pub fn incr(&mut self) -> Option<i64> {
+        match self {
+            Value::Integer(i) => {
+                *i = i.checked_add(1)?;
+                Some(*i)
+            }
+            Value::BulkString(s) => {
+                let mut i = str::from_utf8(s).ok().and_then(|s| s.parse::<i64>().ok())?;
+                i = i.checked_add(1)?;
+                *self = Value::Integer(i);
+                Some(i)
+            }
+            _ => None,
+        }
+    }
+
     pub fn as_float(&self) -> Option<f64> {
         match self {
             Value::Integer(i) => Some(*i as f64),

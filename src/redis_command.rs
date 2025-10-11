@@ -37,6 +37,7 @@ pub enum RedisCommand {
     XRange(Bytes, Value, Value),
     XRead(Vec<Bytes>, Vec<Value>),
     BXRead(Vec<Bytes>, u64, Vec<Value>),
+    Incr(Bytes),
 }
 
 impl RedisCommand {
@@ -354,6 +355,14 @@ impl RedisCommand {
                 }
                 framed.send(&Value::Array(streams)).await
             }
+            RedisCommand::Incr(key) => {
+                let mut env = env.lock().await;
+                let number = env.map.get_mut(&key).unwrap();
+                number.incr();
+                let response = Value::Integer(number.as_integer().unwrap());
+
+                framed.send(&response).await
+            }
         }
     }
 
@@ -501,6 +510,10 @@ impl RedisCommand {
                                 panic!("{mode}: Unknown command of XREAD.")
                             }
                         }
+                    }
+                    "INCR" => {
+                        let key = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        RedisCommand::Incr(key)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
