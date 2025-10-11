@@ -1,6 +1,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};
 use std::ops::Bound::{Excluded, Unbounded};
+use std::panic;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -12,6 +13,7 @@ use tokio::sync::oneshot;
 use tokio::time::timeout;
 use tokio_util::codec::Framed;
 
+use crate::env::WaitFor;
 use crate::resp_decoder::{Stream, StreamID};
 use crate::{
     resp_decoder::{RespParser, Value},
@@ -34,6 +36,7 @@ pub enum RedisCommand {
     XAdd(Bytes, Value, HashMap<Bytes, Value>),
     XRange(Bytes, Value, Value),
     XRead(Vec<Bytes>, Vec<Value>),
+    BXRead(Vec<Bytes>, u64, Vec<Value>),
 }
 
 impl RedisCommand {
@@ -92,7 +95,7 @@ impl RedisCommand {
                         len
                     }
                 } as _;
-                alert(list_key, &mut env).await;
+                list_update_alert(list_key, &mut env).await;
                 framed.send(&Value::Integer(len)).await
             }
             RedisCommand::LRange(list_key, l, r) => {
@@ -136,7 +139,7 @@ impl RedisCommand {
                         len
                     }
                 } as _;
-                alert(list_key, &mut env).await;
+                list_update_alert(list_key, &mut env).await;
                 framed.send(&Value::Integer(len)).await
             }
             RedisCommand::LLen(list_key) => {
@@ -180,7 +183,7 @@ impl RedisCommand {
                     .waitlist
                     .entry(Arc::new(list_key))
                     .or_default()
-                    .push_back(tx);
+                    .push_back(WaitFor::List(tx));
                 let item = &if timeout_limit != 0f64 {
                     timeout(Duration::from_secs_f64(timeout_limit), rx)
                         .await
@@ -230,6 +233,7 @@ impl RedisCommand {
                         map_entry.insert(Value::Stream(stream));
                     }
                 }
+                stream_update_alert(stream_key, &mut env).await;
                 framed.send(&stream_entry_id).await
             }
             RedisCommand::XRange(stream_key, left, right) => {
@@ -282,8 +286,38 @@ impl RedisCommand {
                 }
                 framed.send(&Value::Array(streams)).await
             }
+            RedisCommand::BXRead(stream_keys, block_milisec, ids) => {
+                let mut env = env.lock().await;
+                let mut streams = VecDeque::new();
+                for (stream_key, id) in stream_keys.into_iter().zip(ids.into_iter()) {
+                    let stream = env.map.get(&stream_key).unwrap().as_stream().unwrap();
+                    let l_bound = StreamID::parse(id, true).unwrap();
+                    let mut items = stream.range((Excluded(l_bound), Unbounded)).peekable();
+                    if items.peek().is_none() {
+                        let (tx, rx) = oneshot::channel();
+                        env.waitlist
+                            .entry(Arc::new(stream_key))
+                            .or_default()
+                            .push_back(WaitFor::Stream(l_bound, tx));
+                        let single_stream = if block_milisec == 0 {
+                            rx.await
+                                .expect("Call receiver after all the sender has been droped.")
+                        } else {
+                            timeout(Duration::from_millis(block_milisec), rx)
+                                .await
+                                .map(|x| {
+                                    x.expect("Call receiver after all the sender has been droped.")
+                                })
+                                .unwrap_or(Value::NullArray)
+                        };
+                        streams.push_back(single_stream);
+                    }
+                }
+                framed.send(&Value::Array(streams)).await
+            }
         }
     }
+
     pub fn parse_command(value: Value) -> RedisCommand {
         match value {
             Value::Array(arr) if !arr.is_empty() => {
@@ -397,16 +431,36 @@ impl RedisCommand {
                     }
                     "XREAD" => {
                         let mode = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
-                        // assert_eq!(mode, "STREAMS");
-                        let streams_count = arr.len() / 2 - 1;
-                        let key = arr
-                            .iter()
-                            .skip(2)
-                            .take(streams_count)
-                            .map(|x| x.as_bulk_string().unwrap().clone())
-                            .collect();
-                        let id = arr.into_iter().skip(2 + streams_count).collect();
-                        RedisCommand::XRead(key, id)
+                        let mode = str::from_utf8(&mode).unwrap().to_ascii_uppercase();
+                        match mode.as_str() {
+                            "STREAM" => {
+                                let streams_count = arr.len() / 2 - 1;
+                                let key = arr
+                                    .iter()
+                                    .skip(2)
+                                    .take(streams_count)
+                                    .map(|x| x.as_bulk_string().unwrap().clone())
+                                    .collect();
+                                let id = arr.into_iter().skip(2 + streams_count).collect();
+                                RedisCommand::XRead(key, id)
+                            }
+                            "BLOCKS" => {
+                                let block_milisec =
+                                    arr.get(2).unwrap().as_integer().unwrap() as u64;
+                                let streams_count = arr.len() / 2 - 3;
+                                let key = arr
+                                    .iter()
+                                    .skip(4)
+                                    .take(streams_count)
+                                    .map(|x| x.as_bulk_string().unwrap().clone())
+                                    .collect();
+                                let id = arr.into_iter().skip(4 + streams_count).collect();
+                                RedisCommand::BXRead(key, block_milisec, id)
+                            }
+                            _ => {
+                                panic!("Unknown command of XREAD.")
+                            }
+                        }
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
@@ -416,8 +470,47 @@ impl RedisCommand {
     }
 }
 
-async fn alert(list_key: Arc<Bytes>, env: &mut futures::lock::MutexGuard<'_, Env>) {
-    let Some(sender) = env.waitlist.get_mut(&list_key).and_then(|s| s.pop_front()) else {
+async fn stream_update_alert(stream_key: Arc<Bytes>, env: &mut futures::lock::MutexGuard<'_, Env>) {
+    let Some(WaitFor::Stream(l_bound, sender)) = env
+        .waitlist
+        .get_mut(&stream_key)
+        .and_then(|s| s.pop_front())
+    else {
+        return;
+    };
+    let Some(Value::Stream(stream)) = env.map.get_mut(&stream_key) else {
+        unreachable!()
+    };
+    let mut items = stream.range((Excluded(l_bound), Unbounded)).peekable();
+    let single_stream = if items.peek().is_none() {
+        return;
+    } else {
+        let mut arr = VecDeque::new();
+        for (stream_id, kvp) in items {
+            let mut kvp_arr = VecDeque::new();
+            kvp.iter().for_each(|(k, v)| {
+                kvp_arr.push_back(Value::BulkString(k.clone()));
+                kvp_arr.push_back(v.clone());
+            });
+            let kvp_arr = Value::Array(kvp_arr);
+            let stream_entry = Value::Array([stream_id.as_bulk_string().clone(), kvp_arr].into());
+            arr.push_back(stream_entry);
+        }
+        Value::Array(
+            [
+                Value::BulkString(Arc::as_ref(&stream_key).clone()),
+                Value::Array(arr),
+            ]
+            .into(),
+        )
+    };
+    sender.send(single_stream).ok();
+    eprintln!("send");
+}
+
+async fn list_update_alert(list_key: Arc<Bytes>, env: &mut futures::lock::MutexGuard<'_, Env>) {
+    let Some(WaitFor::List(sender)) = env.waitlist.get_mut(&list_key).and_then(|s| s.pop_front())
+    else {
         return;
     };
     let Some(Value::Array(arr)) = env.map.get_mut(&list_key) else {
