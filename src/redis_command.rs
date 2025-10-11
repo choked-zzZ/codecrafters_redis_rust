@@ -363,7 +363,7 @@ impl RedisCommand {
                     .and_modify(|x| {
                         x.incr();
                     })
-                    .or_insert(Value::Integer(1));
+                    .or_insert(Value::BulkString("1".into()));
                 let response = Value::Integer(number.as_integer().unwrap());
 
                 framed.send(&response).await
