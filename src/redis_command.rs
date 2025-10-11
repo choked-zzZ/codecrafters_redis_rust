@@ -313,6 +313,7 @@ impl RedisCommand {
                         };
                         streams.push_back(single_stream);
                     } else {
+                        eprintln!("Contents detected. no block.");
                         let items = items.unwrap();
                         let mut entries = VecDeque::new();
                         for (stream_id, fields) in items {
