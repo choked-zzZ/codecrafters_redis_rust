@@ -483,6 +483,7 @@ impl RedisCommand {
                                     .map(|x| x.as_bulk_string().unwrap().clone())
                                     .collect();
                                 let id = arr.into_iter().skip(4 + streams_count).collect();
+                                eprintln!("{block_milisec} and {key:?} and {id:?}");
                                 RedisCommand::BXRead(key, block_milisec, id)
                             }
                             _ => {
