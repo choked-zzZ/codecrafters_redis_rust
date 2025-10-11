@@ -234,6 +234,7 @@ impl RedisCommand {
                         map_entry.insert(Value::Stream(stream));
                     }
                 }
+                eprintln!("ready to alert");
                 stream_update_alert(stream_key, &mut env).await;
                 framed.send(&stream_entry_id).await
             }
