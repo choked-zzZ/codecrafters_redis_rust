@@ -38,6 +38,7 @@ pub enum RedisCommand {
     XRead(Vec<Bytes>, Vec<Value>),
     BXRead(Vec<Bytes>, u64, Vec<Value>),
     Incr(Bytes),
+    Multi,
 }
 
 impl RedisCommand {
@@ -379,6 +380,10 @@ impl RedisCommand {
                     }
                 }
             }
+            RedisCommand::Multi => {
+                let response = Value::String("OK".into());
+                framed.send(&response).await
+            }
         }
     }
 
@@ -531,6 +536,7 @@ impl RedisCommand {
                         let key = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         RedisCommand::Incr(key)
                     }
+                    "MULTI" => RedisCommand::Multi,
                     _ => panic!("Unknown command or invalid arguments"),
                 }
             }
