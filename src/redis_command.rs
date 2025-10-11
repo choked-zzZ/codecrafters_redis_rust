@@ -380,19 +380,22 @@ impl RedisCommand {
                     env.in_transaction.insert(addr, Vec::new());
                     Value::String("OK".into())
                 }
-                RedisCommand::Exec => match env.lock().await.in_transaction.remove(&addr) {
-                    None => Value::Error("ERR EXEC without MULTI".into()),
-                    Some(transaction) => {
-                        eprintln!("Ready to exec");
-                        let mut arr = VecDeque::new();
-                        for command in transaction {
-                            eprintln!("ready to exec command {command:?}");
-                            arr.push_back(command.exec(env.clone(), addr).await);
-                            eprintln!("successfully execed.");
+                RedisCommand::Exec => {
+                    let mut env_unlocked = env.lock().await;
+                    let transaction = env_unlocked.in_transaction.remove(&addr);
+                    drop(env_unlocked);
+                    match transaction {
+                        None => Value::Error("ERR EXEC without MULTI".into()),
+                        Some(transaction) => {
+                            let mut arr = VecDeque::new();
+                            for command in transaction {
+                                arr.push_back(command.exec(env.clone(), addr).await);
+                                eprintln!("Exec one")
+                            }
+                            Value::Array(arr)
                         }
-                        Value::Array(arr)
                     }
-                },
+                }
                 RedisCommand::Discard => match env.lock().await.in_transaction.remove(&addr) {
                     None => Value::Error("ERR DISCARD without MULTI".into()),
                     Some(_) => Value::String("OK".into()),
