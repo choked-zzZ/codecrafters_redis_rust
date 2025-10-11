@@ -77,7 +77,7 @@ impl RedisCommand {
                     }
                 };
                 let item = match item {
-                    val @ Value::BulkString(_) => val,
+                    val @ Value::BulkString(_) | val @ Value::NullBulkString => val,
                     Value::Integer(i) => &Value::BulkString(i.to_string().into()),
                     val => todo!("{val:?}"),
                 };
