@@ -501,6 +501,7 @@ impl RedisCommand {
     }
 }
 
+#[inline]
 fn time_now() {
     eprintln!(
         "{}",
