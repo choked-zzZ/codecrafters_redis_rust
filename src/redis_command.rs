@@ -306,8 +306,10 @@ impl RedisCommand {
                         drop(env);
                         let single_stream = if block_milisec == 0 {
                             eprintln!("forever");
-                            rx.await
-                                .expect("Call receiver after all the sender has been droped.")
+                            Some(
+                                rx.await
+                                    .expect("Call receiver after all the sender has been droped."),
+                            )
                         } else {
                             eprintln!("wait {block_milisec} ms");
                             time_now();
@@ -316,10 +318,15 @@ impl RedisCommand {
                                 .map(|x| {
                                     x.expect("Call receiver after all the sender has been droped.")
                                 })
-                                .unwrap_or(Value::NullArray)
+                                .ok()
+                            // .unwrap_or(Value::NullArray)
                         };
                         eprintln!("got a single stream {single_stream:?}");
-                        streams.push_back(single_stream);
+                        if let Some(single_stream) = single_stream {
+                            streams.push_back(single_stream);
+                        } else {
+                            return framed.send(&Value::NullArray).await;
+                        }
                     } else {
                         eprintln!("Contents detected. no block.");
                         let items = items.unwrap();
