@@ -74,6 +74,7 @@ async fn main() {
     let listener = TcpListener::bind(format!("127.0.0.1:{}", args.port))
         .await
         .unwrap();
+    eprintln!("{:?}", args.replicaof);
     let env = Arc::new(Mutex::new(Env::default()));
     loop {
         let (stream, addr) = listener
