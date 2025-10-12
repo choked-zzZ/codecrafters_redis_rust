@@ -34,6 +34,7 @@ async fn connection_handler(
     let mut framed = Framed::new(stream, RespParser);
 
     if let Some(ref _addr) = args.replicaof {
+        eprintln!("enter.");
         let addr: SocketAddr = "127.0.0.1:6379".parse().unwrap();
         eprintln!("send.");
         let handshake_stream = TcpStream::connect(addr).await.expect("Connect failed.");
