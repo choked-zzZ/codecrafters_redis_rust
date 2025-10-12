@@ -35,12 +35,15 @@ async fn connection_handler(
 
     if let Some(ref _addr) = args.replicaof {
         let addr: SocketAddr = "127.0.0.1:6380".parse().unwrap();
+        eprintln!("send.");
         let handshake_stream = TcpStream::connect(addr).await.expect("Connect failed.");
         let mut handshake_framed = Framed::new(handshake_stream, RespParser);
+        eprintln!("hs1");
         handshake_framed
             .send(&Value::Array([Value::BulkString("PING".into())].into()))
             .await
             .expect("send failed.");
+        eprintln!("suc");
     }
 
     while let Some(result) = framed.next().await {
