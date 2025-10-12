@@ -9,6 +9,7 @@ use tokio_util::codec::Framed;
 
 use crate::redis_command::RedisCommand;
 use crate::resp_decoder::RespParser;
+use crate::resp_decoder::Value;
 use env::Env;
 
 mod env;
@@ -21,7 +22,7 @@ struct Args {
     port: u32,
 
     #[arg(long, short)]
-    replicaof: Option<String>,
+    replicaof: Option<SocketAddr>,
 }
 
 async fn connection_handler(
@@ -31,6 +32,15 @@ async fn connection_handler(
     args: Arc<Args>,
 ) {
     let mut framed = Framed::new(stream, RespParser);
+
+    if let Some(addr) = args.replicaof {
+        let handshake_stream = TcpStream::connect(addr).await.expect("Connect failed.");
+        let mut handshake_framed = Framed::new(handshake_stream, RespParser);
+        handshake_framed
+            .send(&Value::Array([Value::BulkString("PING".into())].into()))
+            .await
+            .expect("send failed.");
+    }
 
     while let Some(result) = framed.next().await {
         match result {
