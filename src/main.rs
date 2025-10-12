@@ -36,7 +36,8 @@ async fn connection_handler(
     if let Some(ref _addr) = args.replicaof {
         let addr: SocketAddr = "127.0.0.1:6380".parse().unwrap();
         eprintln!("send.");
-        let handshake_stream = TcpStream::connect(addr).await.expect("Connect failed.");
+        let handshake_listener = TcpListener::bind(addr).await.unwrap();
+        let (handshake_stream, _addr) = handshake_listener.accept().await.unwrap();
         let mut handshake_framed = Framed::new(handshake_stream, RespParser);
         eprintln!("hs1");
         handshake_framed
@@ -74,7 +75,6 @@ async fn main() {
     let listener = TcpListener::bind(format!("127.0.0.1:{}", args.port))
         .await
         .unwrap();
-    eprintln!("{:?}", args.replicaof);
     let env = Arc::new(Mutex::new(Env::default()));
     loop {
         let (stream, addr) = listener
