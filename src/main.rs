@@ -4,7 +4,6 @@ use futures::SinkExt;
 use futures::StreamExt;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::net::unix::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
 
