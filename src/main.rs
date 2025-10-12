@@ -73,6 +73,7 @@ async fn connection_handler(
 #[tokio::main]
 async fn main() {
     let args = Arc::new(Args::parse());
+    eprintln!("{:?}", args.port);
     let listener = TcpListener::bind(format!("127.0.0.1:{}", args.port))
         .await
         .unwrap();
