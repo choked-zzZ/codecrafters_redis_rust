@@ -73,16 +73,17 @@ async fn connection_handler(
 #[tokio::main]
 async fn main() {
     let args = Arc::new(Args::parse());
-    eprintln!("{:?}", args.port);
     let listener = TcpListener::bind(format!("127.0.0.1:{}", args.port))
         .await
         .unwrap();
+    eprintln!("1");
     let env = Arc::new(Mutex::new(Env::default()));
     loop {
         let (stream, addr) = listener
             .accept()
             .await
             .expect("listener connection failed.");
+        eprintln!("2");
         eprintln!("New connection from {addr}");
 
         let env = env.clone();
