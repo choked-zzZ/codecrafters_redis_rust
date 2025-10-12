@@ -34,10 +34,9 @@ async fn connection_handler(
     let mut framed = Framed::new(stream, RespParser);
 
     if let Some(ref _addr) = args.replicaof {
-        let addr: SocketAddr = "127.0.0.1:6380".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:6379".parse().unwrap();
         eprintln!("send.");
-        let handshake_listener = TcpListener::bind(addr).await.unwrap();
-        let (handshake_stream, _addr) = handshake_listener.accept().await.unwrap();
+        let handshake_stream = TcpStream::connect(addr).await.expect("Connect failed.");
         let mut handshake_framed = Framed::new(handshake_stream, RespParser);
         eprintln!("hs1");
         handshake_framed
