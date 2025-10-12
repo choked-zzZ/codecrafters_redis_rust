@@ -11,6 +11,7 @@ use tokio::sync::oneshot::Sender;
 use crate::{
     redis_command::RedisCommand,
     resp_decoder::{StreamID, Value},
+    Args,
 };
 
 #[derive(Debug, Default)]
@@ -19,6 +20,7 @@ pub struct Env {
     pub expiry: HashMap<Arc<Bytes>, SystemTime>,
     pub waitlist: HashMap<Arc<Bytes>, VecDeque<WaitFor>>,
     pub in_transaction: HashMap<SocketAddr, Vec<RedisCommand>>,
+    pub arguments: HashMap<SocketAddr, Args>,
 }
 
 #[derive(Debug)]

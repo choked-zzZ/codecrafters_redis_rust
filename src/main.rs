@@ -19,9 +19,17 @@ mod resp_decoder;
 struct Args {
     #[arg(long, short, default_value_t = 6379)]
     port: u32,
+
+    #[arg(long, short)]
+    replicaof: Option<String>,
 }
 
-async fn connection_handler(stream: TcpStream, env: Arc<Mutex<Env>>, addr: SocketAddr) {
+async fn connection_handler(
+    stream: TcpStream,
+    env: Arc<Mutex<Env>>,
+    addr: SocketAddr,
+    args: Arc<Args>,
+) {
     let mut framed = Framed::new(stream, RespParser);
 
     while let Some(result) = framed.next().await {
@@ -29,7 +37,7 @@ async fn connection_handler(stream: TcpStream, env: Arc<Mutex<Env>>, addr: Socke
             Ok(value) => {
                 eprintln!("recieved: {value:?}");
                 let response = RedisCommand::parse_command(value)
-                    .exec(env.clone(), addr)
+                    .exec(env.clone(), addr, args.clone())
                     .await;
                 eprintln!("{response:?}");
                 if let Err(e) = framed.send(&response).await {
@@ -48,7 +56,7 @@ async fn connection_handler(stream: TcpStream, env: Arc<Mutex<Env>>, addr: Socke
 
 #[tokio::main]
 async fn main() {
-    let args = Args::parse();
+    let args = Arc::new(Args::parse());
     let listener = TcpListener::bind(format!("127.0.0.1:{}", args.port))
         .await
         .unwrap();
@@ -61,8 +69,9 @@ async fn main() {
         eprintln!("New connection from {addr}");
 
         let env = env.clone();
+        let args = args.clone();
         tokio::spawn(async move {
-            connection_handler(stream, env, addr).await;
+            connection_handler(stream, env, addr, args).await;
         });
     }
 }

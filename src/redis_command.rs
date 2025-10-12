@@ -6,7 +6,6 @@ use std::ops::Bound::{Excluded, Unbounded};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use std::{mem, panic};
 
 use bytes::Bytes;
 use futures::lock::Mutex;
@@ -16,6 +15,7 @@ use tokio::time::timeout;
 
 use crate::env::WaitFor;
 use crate::resp_decoder::{Stream, StreamID};
+use crate::Args;
 use crate::{resp_decoder::Value, Env};
 
 #[derive(Debug)]
@@ -48,6 +48,7 @@ impl RedisCommand {
         self,
         env: Arc<Mutex<Env>>,
         addr: SocketAddr,
+        args: Arc<Args>,
     ) -> Pin<Box<dyn Future<Output = Value> + Send>> {
         Box::pin(async move {
             if !matches!(self, RedisCommand::Exec | RedisCommand::Discard) {
@@ -390,7 +391,7 @@ impl RedisCommand {
                         Some(transaction) => {
                             let mut arr = VecDeque::new();
                             for command in transaction {
-                                arr.push_back(command.exec(env.clone(), addr).await);
+                                arr.push_back(command.exec(env.clone(), addr, args.clone()).await);
                             }
                             Value::Array(arr)
                         }
@@ -404,9 +405,15 @@ impl RedisCommand {
                     let section = str::from_utf8(&section).unwrap().to_ascii_uppercase();
                     match section.as_str() {
                         "REPLICATION" => Value::String(
-                            "# Replication
-                            role:master"
-                                .into(),
+                            format!(
+                                "# Replication\nrole:{}",
+                                if args.replicaof.is_some() {
+                                    "slave"
+                                } else {
+                                    "master"
+                                }
+                            )
+                            .into(),
                         ),
                         _ => todo!(),
                     }
