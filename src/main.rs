@@ -4,6 +4,7 @@ use futures::SinkExt;
 use futures::StreamExt;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::net::unix::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
 
@@ -33,7 +34,8 @@ async fn connection_handler(
 ) {
     let mut framed = Framed::new(stream, RespParser);
 
-    if let Some(ref addr) = args.replicaof {
+    if let Some(ref _addr) = args.replicaof {
+        let addr: SocketAddr = "127.0.0.1:6380".parse().unwrap();
         let handshake_stream = TcpStream::connect(addr).await.expect("Connect failed.");
         let mut handshake_framed = Framed::new(handshake_stream, RespParser);
         handshake_framed
