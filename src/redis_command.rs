@@ -406,12 +406,14 @@ impl RedisCommand {
                     match section.as_str() {
                         "REPLICATION" => Value::String(
                             format!(
-                                "# Replication\nrole:{}",
+                                "# Replication\nrole:{}\nmaster_replid:{}\nmaster_repl_offset:{}\n",
                                 if args.replicaof.is_some() {
                                     "slave"
                                 } else {
                                     "master"
-                                }
+                                },
+                                "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
+                                "0",
                             )
                             .into(),
                         ),
