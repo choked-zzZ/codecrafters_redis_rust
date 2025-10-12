@@ -22,7 +22,7 @@ struct Args {
     port: u32,
 
     #[arg(long, short)]
-    replicaof: Option<SocketAddr>,
+    replicaof: Option<String>,
 }
 
 async fn connection_handler(
@@ -33,7 +33,7 @@ async fn connection_handler(
 ) {
     let mut framed = Framed::new(stream, RespParser);
 
-    if let Some(addr) = args.replicaof {
+    if let Some(ref addr) = args.replicaof {
         let handshake_stream = TcpStream::connect(addr).await.expect("Connect failed.");
         let mut handshake_framed = Framed::new(handshake_stream, RespParser);
         handshake_framed
