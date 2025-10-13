@@ -9,15 +9,15 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bytes::Bytes;
 use futures::lock::Mutex;
-use futures::select;
 use itertools::Itertools;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 
 use crate::env::WaitFor;
 use crate::resp_decoder::{Stream, StreamID};
-use crate::Args;
+use crate::REPL_ID;
 use crate::{resp_decoder::Value, Env};
+use crate::{Args, REPL_OFFSET};
 
 #[derive(Debug)]
 pub enum RedisCommand {
@@ -43,6 +43,7 @@ pub enum RedisCommand {
     Discard,
     Info(Bytes),
     Replconf(Value, Value),
+    PSync(Value, Value),
 }
 
 impl RedisCommand {
@@ -414,8 +415,8 @@ impl RedisCommand {
                                 } else {
                                     "master"
                                 },
-                                "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
-                                "0",
+                                REPL_ID,
+                                REPL_OFFSET,
                             )
                             .into(),
                         ),
@@ -423,6 +424,9 @@ impl RedisCommand {
                     }
                 }
                 RedisCommand::Replconf(_fi, _se) => Value::String("OK".into()),
+                RedisCommand::PSync(_fi, _se) => {
+                    Value::String(format!("FULLRESYNC {} {}", REPL_ID, REPL_OFFSET).into())
+                }
             }
         })
     }

@@ -16,6 +16,9 @@ mod env;
 mod redis_command;
 mod resp_decoder;
 
+const REPL_ID: &str = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
+const REPL_OFFSET: &str = "0";
+
 #[derive(Parser, Debug)]
 struct Args {
     #[arg(long, short, default_value_t = 6379)]
