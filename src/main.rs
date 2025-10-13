@@ -56,11 +56,9 @@ async fn connection_handler(
                 }
                 if command.can_modify() {
                     let mut env = env.lock().await;
-                    if let Some(replicas) = env.replicas.get_mut(&addr) {
-                        for replica in replicas.iter_mut() {
-                            replica.send(&value).await.expect("send error.");
-                            eprintln!("send a command");
-                        }
+                    for replica in env.replicas.iter_mut() {
+                        replica.send(&value).await.expect("send error.");
+                        eprintln!("send a command");
                     }
                 }
             }
@@ -71,14 +69,7 @@ async fn connection_handler(
             }
         }
     }
-    match env.lock().await.replicas.entry(addr) {
-        Entry::Occupied(mut entry) => {
-            entry.get_mut().push(framed);
-        }
-        Entry::Vacant(e) => {
-            e.insert(vec![framed]);
-        }
-    }
+    env.lock().await.replicas.push(framed);
     eprintln!("{addr}: replica mode on.")
 }
 
@@ -166,7 +157,6 @@ async fn main() {
             .await
             .expect("listener connection failed.");
         eprintln!("New connection from {addr}");
-        env.lock().await.replicas.insert(addr, Vec::new());
 
         let env = env.clone();
         let args = args.clone();
