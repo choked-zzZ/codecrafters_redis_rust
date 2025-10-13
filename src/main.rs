@@ -115,6 +115,7 @@ async fn replica_handler(addr: String, args: &Arc<Args>, env: Arc<Mutex<Env>>) {
         );
         framed.send(&psync).await.unwrap();
         framed.next().await;
+        framed.next().await;
         while let Some(result) = framed.next().await {
             match result {
                 Ok(value) => {
