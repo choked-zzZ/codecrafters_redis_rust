@@ -20,7 +20,7 @@ pub struct Env {
     pub expiry: HashMap<Arc<Bytes>, SystemTime>,
     pub waitlist: HashMap<Arc<Bytes>, VecDeque<WaitFor>>,
     pub in_transaction: HashMap<SocketAddr, Vec<RedisCommand>>,
-    pub arguments: HashMap<SocketAddr, Args>,
+    pub replicas: HashMap<SocketAddr, Vec<SocketAddr>>,
 }
 
 #[derive(Debug)]

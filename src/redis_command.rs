@@ -48,6 +48,23 @@ pub enum RedisCommand {
 }
 
 impl RedisCommand {
+    pub fn can_modify(&self) -> bool {
+        matches!(
+            self,
+            RedisCommand::Set(..)
+                | RedisCommand::RPush(..)
+                | RedisCommand::LPush(..)
+                | RedisCommand::LPop(..)
+                | RedisCommand::LPopMany(..)
+                | RedisCommand::BLPop(..)
+                | RedisCommand::XAdd(..)
+                | RedisCommand::Incr(..)
+                | RedisCommand::Multi
+                | RedisCommand::Exec
+                | RedisCommand::Discard
+        )
+    }
+
     pub fn exec(
         self,
         env: Arc<Mutex<Env>>,
@@ -444,9 +461,9 @@ impl RedisCommand {
         })
     }
 
-    pub fn parse_command(value: Value) -> RedisCommand {
-        match value {
-            Value::Array(arr) if !arr.is_empty() => {
+    pub fn parse_command(value: Arc<Value>) -> RedisCommand {
+        match *value {
+            Value::Array(ref arr) if !arr.is_empty() => {
                 let Value::BulkString(command_bytes) = arr.front().unwrap() else {
                     unreachable!();
                 };
@@ -500,7 +517,7 @@ impl RedisCommand {
                     "RPUSH" => {
                         assert!(arr.len() >= 3);
                         let list_key = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
-                        let items = arr.into_iter().skip(2).collect();
+                        let items = arr.into_iter().skip(2).map(|x| x.clone()).collect();
                         RedisCommand::RPush(list_key, items)
                     }
                     "LRANGE" => {
@@ -513,7 +530,7 @@ impl RedisCommand {
                     "LPUSH" => {
                         assert!(arr.len() >= 3);
                         let list_key = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
-                        let items = arr.into_iter().skip(2).collect();
+                        let items = arr.into_iter().skip(2).map(|x| x.clone()).collect();
                         RedisCommand::LPush(list_key, items)
                     }
                     "LLEN" => {
@@ -544,8 +561,8 @@ impl RedisCommand {
                         let stream_key = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         let entry_id = arr.get(2).unwrap().clone();
                         let mut kvp = HashMap::new();
-                        for (k, v) in arr.into_iter().skip(3).tuples() {
-                            kvp.insert(k.into_bytes(), v);
+                        for (k, v) in arr.iter().skip(3).tuples() {
+                            kvp.insert(k.clone().into_bytes(), v.clone());
                         }
                         RedisCommand::XAdd(stream_key, entry_id, kvp)
                     }
@@ -567,7 +584,11 @@ impl RedisCommand {
                                     .take(streams_count)
                                     .map(|x| x.as_bulk_string().unwrap().clone())
                                     .collect();
-                                let id = arr.into_iter().skip(2 + streams_count).collect();
+                                let id = arr
+                                    .iter()
+                                    .skip(2 + streams_count)
+                                    .map(|x| x.clone())
+                                    .collect();
                                 RedisCommand::XRead(key, id)
                             }
                             "BLOCK" => {
@@ -580,7 +601,11 @@ impl RedisCommand {
                                     .take(streams_count)
                                     .map(|x| x.as_bulk_string().unwrap().clone())
                                     .collect();
-                                let id = arr.into_iter().skip(4 + streams_count).collect();
+                                let id = arr
+                                    .iter()
+                                    .skip(4 + streams_count)
+                                    .map(|x| x.clone())
+                                    .collect();
                                 eprintln!("{block_milisec} and {key:?} and {id:?}");
                                 RedisCommand::BXRead(key, block_milisec, id)
                             }

@@ -67,7 +67,7 @@ impl StreamID {
             let stream = stream.unwrap();
             let last = stream
                 .last_key_value()
-                .map(|x| x.0.clone())
+                .map(|x| *x.0)
                 .unwrap_or(MIN_STREAM_ID);
             return Some(last);
         }

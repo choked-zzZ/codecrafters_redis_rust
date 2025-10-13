@@ -2,9 +2,9 @@ use clap::Parser;
 use futures::lock::Mutex;
 use futures::SinkExt;
 use futures::StreamExt;
+use std::collections::hash_map::Entry;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
 
@@ -41,9 +41,12 @@ async fn connection_handler(
         match result {
             Ok(value) => {
                 eprintln!("recieved: {value:?}");
-                let response = RedisCommand::parse_command(value)
-                    .exec(env.clone(), addr, args.clone())
-                    .await;
+                let value = Arc::new(value);
+                let command = RedisCommand::parse_command(value.clone());
+                if command.can_modify() {
+                    framed.send(&value).await;
+                }
+                let response = command.exec(env.clone(), addr, args.clone()).await;
                 eprintln!("{response:?}");
                 if let Err(e) = framed.send(&response).await {
                     eprintln!("carsh into error: {e}");
@@ -113,12 +116,20 @@ async fn main() {
     eprintln!("1");
     let env = Arc::new(Mutex::new(Env::default()));
     let args_1 = args.clone();
+
+    // Replica
     if let Some(addr) = &args.replicaof {
+        // match env.lock().await.replicas.entry(socket_addr) {
+        //     Entry::Occupied(mut entry) => {
+        //         entry.get_mut().push(value);
+        //     }
+        // }
         let addr = addr.clone();
         tokio::spawn(async move {
             replica_handler(addr, &args_1).await;
         });
     }
+
     loop {
         let (stream, addr) = listener
             .accept()
