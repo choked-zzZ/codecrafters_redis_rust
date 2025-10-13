@@ -79,6 +79,7 @@ async fn main() {
     eprintln!("1");
     let env = Arc::new(Mutex::new(Env::default()));
     loop {
+        eprintln!("3");
         let (stream, addr) = listener
             .accept()
             .await
