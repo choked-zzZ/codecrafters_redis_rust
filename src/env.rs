@@ -12,7 +12,6 @@ use tokio_util::codec::Framed;
 use crate::{
     redis_command::RedisCommand,
     resp_decoder::{RespParser, StreamID, Value},
-    Args,
 };
 
 #[derive(Debug, Default)]

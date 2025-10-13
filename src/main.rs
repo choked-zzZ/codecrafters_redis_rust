@@ -1,4 +1,5 @@
 use clap::Parser;
+use futures::lock;
 use futures::lock::Mutex;
 use futures::SinkExt;
 use futures::StreamExt;
@@ -44,29 +45,49 @@ async fn connection_handler(
                 let value = Arc::new(value);
                 let command = RedisCommand::parse_command(value.clone());
                 let response = command.clone().exec(env.clone(), addr, args.clone()).await;
+                if matches!(command, RedisCommand::PSync(..)) {
+                    break;
+                }
                 eprintln!("{response:?}");
                 if let Err(e) = framed.send(&response).await {
                     eprintln!("carsh into error: {e}");
-                    break;
+                    eprintln!("connection closed.");
+                    return;
+                }
+                if command.can_modify() {
+                    let mut env = env.lock().await;
+                    if let Some(replicas) = env.replicas.get_mut(&addr) {
+                        for replica in replicas.iter_mut() {
+                            replica.send(&value).await.expect("send error.");
+                        }
+                    }
                 }
             }
             Err(e) => {
                 eprintln!("failed to decode frame: {e:?}");
-                break;
+                eprintln!("connection closed.");
+                return;
             }
         }
     }
-    eprintln!("connection closed.")
+    match env.lock().await.replicas.entry(addr) {
+        Entry::Occupied(mut entry) => {
+            entry.get_mut().push(framed);
+        }
+        Entry::Vacant(e) => {
+            e.insert(vec![framed]);
+        }
+    }
+    eprintln!("replica mode on.")
 }
 
-async fn replica_handler(addr: String, args: &Arc<Args>) {
+async fn replica_handler(addr: String, args: &Arc<Args>, env: Arc<Mutex<Env>>) {
     let part = addr.split_ascii_whitespace().collect::<Vec<_>>();
-    let mut ip = part[0];
-    if ip == "localhost" {
-        ip = "127.0.0.1";
-    }
+    // let mut ip_str = part[0];
+    let ip = [127u8, 0, 0, 1];
     let port = part[1].parse().unwrap();
-    if let Ok(stream) = TcpStream::connect((ip, port)).await {
+    let addr = SocketAddr::new(std::net::IpAddr::from(ip), port);
+    if let Ok(stream) = TcpStream::connect(addr).await {
         let mut framed = Framed::new(stream, RespParser);
         let handshake_first = Value::Array([Value::BulkString("PING".into())].into());
         framed.send(&handshake_first).await.unwrap();
@@ -101,26 +122,6 @@ async fn replica_handler(addr: String, args: &Arc<Args>) {
         );
         framed.send(&psync).await.unwrap();
         framed.next().await;
-        while let Some(result) = framed.next().await {
-            match result {
-                Ok(value) => {
-                    eprintln!("recieved: {value:?}");
-                    let value = Arc::new(value);
-                    let command = RedisCommand::parse_command(value.clone());
-                    let response = command.clone().exec(env.clone(), addr, args.clone()).await;
-                    eprintln!("{response:?}");
-                    if let Err(e) = framed.send(&response).await {
-                        eprintln!("carsh into error: {e}");
-                        break;
-                    }
-                }
-                Err(e) => {
-                    eprintln!("failed to decode frame: {e:?}");
-                    break;
-                }
-            }
-        }
-        eprintln!("connection closed.")
     }
 }
 
@@ -141,8 +142,9 @@ async fn main() {
         //     }
         // }
         let addr = addr.clone();
+        let env = env.clone();
         tokio::spawn(async move {
-            replica_handler(addr, &args_1).await;
+            replica_handler(addr, &args_1, env).await;
         });
     }
 
@@ -152,6 +154,7 @@ async fn main() {
             .await
             .expect("listener connection failed.");
         eprintln!("New connection from {addr}");
+        env.lock().await.replicas.insert(addr, Vec::new());
 
         let env = env.clone();
         let args = args.clone();
