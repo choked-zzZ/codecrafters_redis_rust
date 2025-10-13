@@ -45,7 +45,7 @@ async fn connection_handler(
                 let value = Arc::new(value);
                 let command = RedisCommand::parse_command(value.clone());
                 let response = command.clone().exec(env.clone(), addr, args.clone()).await;
-                eprintln!("{response:?}");
+                eprintln!("will send back: {response:?}");
                 if let Err(e) = framed.send(&response).await {
                     eprintln!("carsh into error: {e}");
                     eprintln!("connection closed.");
@@ -59,6 +59,7 @@ async fn connection_handler(
                     if let Some(replicas) = env.replicas.get_mut(&addr) {
                         for replica in replicas.iter_mut() {
                             replica.send(&value).await.expect("send error.");
+                            eprintln!("send a command");
                         }
                     }
                 }
