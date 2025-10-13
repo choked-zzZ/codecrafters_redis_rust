@@ -45,14 +45,14 @@ async fn connection_handler(
                 let value = Arc::new(value);
                 let command = RedisCommand::parse_command(value.clone());
                 let response = command.clone().exec(env.clone(), addr, args.clone()).await;
-                if matches!(command, RedisCommand::PSync(..)) {
-                    break;
-                }
                 eprintln!("{response:?}");
                 if let Err(e) = framed.send(&response).await {
                     eprintln!("carsh into error: {e}");
                     eprintln!("connection closed.");
                     return;
+                }
+                if matches!(command, RedisCommand::PSync(..)) {
+                    break;
                 }
                 if command.can_modify() {
                     let mut env = env.lock().await;
