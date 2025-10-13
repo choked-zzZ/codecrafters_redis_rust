@@ -49,9 +49,6 @@ async fn connection_handler(
                     eprintln!("carsh into error: {e}");
                     break;
                 }
-                if command.can_modify() {
-                    framed.send(&value).await.unwrap();
-                }
             }
             Err(e) => {
                 eprintln!("failed to decode frame: {e:?}");
