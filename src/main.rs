@@ -78,7 +78,7 @@ async fn connection_handler(
             e.insert(vec![framed]);
         }
     }
-    eprintln!("replica mode on.")
+    eprintln!("{addr}: replica mode on.")
 }
 
 async fn replica_handler(addr: String, args: &Arc<Args>, env: Arc<Mutex<Env>>) {
