@@ -638,10 +638,7 @@ impl RedisCommand {
                     _ => panic!("Unknown command or invalid arguments"),
                 }
             }
-            _ => {
-                eprintln!("Unknown command");
-                Err(())
-            }
+            _ => panic!("Unknown command"),
         }
     }
 }
