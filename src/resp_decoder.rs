@@ -410,7 +410,7 @@ fn parse(buf: &BytesMut, pos: usize) -> RedisResult {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct RespParser;
 
 impl Decoder for RespParser {

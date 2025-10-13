@@ -110,7 +110,6 @@ async fn main() {
     let listener = TcpListener::bind(format!("127.0.0.1:{}", args.port))
         .await
         .unwrap();
-    eprintln!("1");
     let env = Arc::new(Mutex::new(Env::default()));
     let args_1 = args.clone();
 

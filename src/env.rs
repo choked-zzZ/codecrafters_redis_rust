@@ -6,11 +6,12 @@ use std::{
 };
 
 use bytes::Bytes;
-use tokio::sync::oneshot::Sender;
+use tokio::{net::TcpStream, sync::oneshot::Sender};
+use tokio_util::codec::Framed;
 
 use crate::{
     redis_command::RedisCommand,
-    resp_decoder::{StreamID, Value},
+    resp_decoder::{RespParser, StreamID, Value},
     Args,
 };
 
@@ -20,7 +21,7 @@ pub struct Env {
     pub expiry: HashMap<Arc<Bytes>, SystemTime>,
     pub waitlist: HashMap<Arc<Bytes>, VecDeque<WaitFor>>,
     pub in_transaction: HashMap<SocketAddr, Vec<RedisCommand>>,
-    pub replicas: HashMap<SocketAddr, Vec<SocketAddr>>,
+    pub replicas: HashMap<SocketAddr, Vec<Framed<TcpStream, RespParser>>>,
 }
 
 #[derive(Debug)]
