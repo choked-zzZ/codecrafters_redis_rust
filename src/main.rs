@@ -4,6 +4,7 @@ use futures::SinkExt;
 use futures::StreamExt;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
 
@@ -78,13 +79,28 @@ async fn main() {
         .unwrap();
     eprintln!("1");
     let env = Arc::new(Mutex::new(Env::default()));
+    let args = args.clone();
+    if let Some(addr) = &args.replicaof {
+        let addr = addr.clone();
+        tokio::spawn(async move {
+            let part = addr.split_ascii_whitespace().collect::<Vec<_>>();
+            let mut ip = part[0];
+            if ip == "localhost" {
+                ip = "127.0.0.1";
+            }
+            let port = part[1].parse().unwrap();
+            if let Ok(stream) = TcpStream::connect((ip, port)).await {
+                let mut framed = Framed::new(stream, RespParser);
+                let handshake_first = Value::Array([Value::BulkString("PING".into())].into());
+                framed.send(&handshake_first).await.unwrap();
+            }
+        });
+    }
     loop {
-        eprintln!("3");
         let (stream, addr) = listener
             .accept()
             .await
             .expect("listener connection failed.");
-        eprintln!("2");
         eprintln!("New connection from {addr}");
 
         let env = env.clone();
