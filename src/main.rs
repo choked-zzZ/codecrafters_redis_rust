@@ -41,7 +41,7 @@ async fn connection_handler(
     while let Some(result) = framed.next().await {
         match result {
             Ok(value) => {
-                eprintln!("recieved: {value:?}");
+                eprintln!("recieved: {value:?} from addr {addr:?}");
                 let value = Arc::new(value);
                 let command = RedisCommand::parse_command(value.clone());
                 let response = command.clone().exec(env.clone(), addr, args.clone()).await;
