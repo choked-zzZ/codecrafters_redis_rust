@@ -76,6 +76,7 @@ async fn replica_handler(addr: String, args: &Arc<Args>) {
             .into(),
         );
         framed.send(&replconf_1).await.unwrap();
+        framed.next().await;
         let replconf_2 = Value::Array(
             [
                 Value::BulkString("REPLCONF".into()),
@@ -85,6 +86,7 @@ async fn replica_handler(addr: String, args: &Arc<Args>) {
             .into(),
         );
         framed.send(&replconf_2).await.unwrap();
+        framed.next().await;
     }
 }
 
