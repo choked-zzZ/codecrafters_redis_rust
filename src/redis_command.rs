@@ -430,6 +430,7 @@ impl RedisCommand {
                 RedisCommand::Replconf(_fi, _se) => Value::String("OK".into()),
                 RedisCommand::PSync(_fi, _se) => {
                     let mut buf = vec![b'$'];
+                    fs::write("./a.txt", &buf).await.expect("write error.");
                     let mut rdb_content = fs::read("../empty.rdb").await.expect("read error");
                     buf.extend_from_slice(rdb_content.len().to_string().as_bytes());
                     buf.extend_from_slice(b"\r\n");
