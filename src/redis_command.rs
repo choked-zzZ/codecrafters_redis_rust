@@ -9,6 +9,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bytes::Bytes;
 use futures::lock::Mutex;
+use futures::select;
 use itertools::Itertools;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
@@ -41,6 +42,7 @@ pub enum RedisCommand {
     Exec,
     Discard,
     Info(Bytes),
+    Replconf(Value, Value),
 }
 
 impl RedisCommand {
@@ -420,6 +422,7 @@ impl RedisCommand {
                         _ => todo!(),
                     }
                 }
+                RedisCommand::Replconf(_fi, _se) => Value::String("OK".into()),
             }
         })
     }
