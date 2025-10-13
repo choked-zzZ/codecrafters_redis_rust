@@ -583,6 +583,11 @@ impl RedisCommand {
                         let section = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         RedisCommand::Info(section)
                     }
+                    "REPLCONF" => {
+                        let fi = arr.get(1).unwrap().clone();
+                        let se = arr.get(2).unwrap().clone();
+                        RedisCommand::Replconf(fi, se)
+                    }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
             }
