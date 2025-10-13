@@ -101,6 +101,26 @@ async fn replica_handler(addr: String, args: &Arc<Args>) {
         );
         framed.send(&psync).await.unwrap();
         framed.next().await;
+        while let Some(result) = framed.next().await {
+            match result {
+                Ok(value) => {
+                    eprintln!("recieved: {value:?}");
+                    let value = Arc::new(value);
+                    let command = RedisCommand::parse_command(value.clone());
+                    let response = command.clone().exec(env.clone(), addr, args.clone()).await;
+                    eprintln!("{response:?}");
+                    if let Err(e) = framed.send(&response).await {
+                        eprintln!("carsh into error: {e}");
+                        break;
+                    }
+                }
+                Err(e) => {
+                    eprintln!("failed to decode frame: {e:?}");
+                    break;
+                }
+            }
+        }
+        eprintln!("connection closed.")
     }
 }
 
