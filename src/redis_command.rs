@@ -7,15 +7,12 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use bytes::Bytes;
 use futures::lock::Mutex;
 use itertools::Itertools;
-use tokio::fs;
-use tokio::io::AsyncReadExt;
-use tokio::net::TcpStream;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
-use tokio_util::codec::Framed;
 
 use crate::env::WaitFor;
 use crate::resp_decoder::{Stream, StreamID};
@@ -430,8 +427,8 @@ impl RedisCommand {
                 RedisCommand::Replconf(_fi, _se) => Value::String("OK".into()),
                 RedisCommand::PSync(_fi, _se) => {
                     let mut buf = vec![b'$'];
-                    fs::write("./a.txt", &buf).await.expect("write error.");
-                    let mut rdb_content = fs::read("../empty.rdb").await.expect("read error");
+                    let mut rdb_content = STANDARD.decode("UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==").expect("decode_err");
+                    // let mut rdb_content = fs::read("../empty.rdb").await.expect("read error");
                     buf.extend_from_slice(rdb_content.len().to_string().as_bytes());
                     buf.extend_from_slice(b"\r\n");
                     buf.append(&mut rdb_content);
