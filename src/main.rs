@@ -87,6 +87,16 @@ async fn replica_handler(addr: String, args: &Arc<Args>) {
         );
         framed.send(&replconf_2).await.unwrap();
         framed.next().await;
+        let psync = Value::Array(
+            [
+                Value::BulkString("PSYNC".into()),
+                Value::BulkString("?".into()),
+                Value::BulkString("-1".into()),
+            ]
+            .into(),
+        );
+        framed.send(&psync).await.unwrap();
+        framed.next().await;
     }
 }
 
