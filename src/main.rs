@@ -119,6 +119,25 @@ async fn replica_handler(addr: String, args: &Arc<Args>, env: Arc<Mutex<Env>>) {
             match result {
                 Ok(value) => {
                     eprintln!("got {value:?}");
+                    let value = Arc::new(value);
+                    let command = RedisCommand::parse_command(value.clone());
+                    let response = command.clone().exec(env.clone(), addr, args.clone()).await;
+                    eprintln!("{addr} will send back: {response:?}");
+                    if let Err(e) = framed.send(&response).await {
+                        eprintln!("carsh into error: {e}");
+                        eprintln!("connection closed.");
+                        return;
+                    }
+                    if matches!(command, RedisCommand::PSync(..)) {
+                        break;
+                    }
+                    if command.can_modify() {
+                        let mut env = env.lock().await;
+                        for replica in env.replicas.iter_mut() {
+                            replica.send(&value).await.expect("send error.");
+                            eprintln!("send a command");
+                        }
+                    }
                 }
                 Err(e) => {
                     eprintln!("get error {e:?}");
