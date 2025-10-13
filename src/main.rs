@@ -72,7 +72,7 @@ async fn replica_handler(addr: String, args: &Arc<Args>) {
         let replconf_1 = Value::Array(
             [
                 Value::BulkString("REPLCONF".into()),
-                Value::BulkString("listening_port".into()),
+                Value::BulkString("listening-port".into()),
                 Value::BulkString(args.port.to_string().into()),
             ]
             .into(),
