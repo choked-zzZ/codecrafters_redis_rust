@@ -20,7 +20,7 @@ use crate::REPL_ID;
 use crate::{resp_decoder::Value, Env};
 use crate::{Args, REPL_OFFSET};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RedisCommand {
     Ping,
     Echo(Value),

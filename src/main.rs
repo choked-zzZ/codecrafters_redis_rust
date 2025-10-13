@@ -43,14 +43,14 @@ async fn connection_handler(
                 eprintln!("recieved: {value:?}");
                 let value = Arc::new(value);
                 let command = RedisCommand::parse_command(value.clone());
-                if command.can_modify() {
-                    framed.send(&value).await;
-                }
-                let response = command.exec(env.clone(), addr, args.clone()).await;
+                let response = command.clone().exec(env.clone(), addr, args.clone()).await;
                 eprintln!("{response:?}");
                 if let Err(e) = framed.send(&response).await {
                     eprintln!("carsh into error: {e}");
                     break;
+                }
+                if command.can_modify() {
+                    framed.send(&value).await.unwrap();
                 }
             }
             Err(e) => {
