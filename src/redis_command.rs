@@ -638,7 +638,7 @@ impl RedisCommand {
                     _ => panic!("Unknown command or invalid arguments"),
                 }
             }
-            _ => panic!("Unknown command"),
+            ref cmd => panic!("Unknown command {cmd:?}"),
         }
     }
 }
