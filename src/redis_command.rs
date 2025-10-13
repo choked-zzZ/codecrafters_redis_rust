@@ -10,8 +10,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use bytes::Bytes;
 use futures::lock::Mutex;
 use itertools::Itertools;
+use tokio::net::TcpStream;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
+use tokio_util::codec::Framed;
 
 use crate::env::WaitFor;
 use crate::resp_decoder::{Stream, StreamID};
@@ -424,9 +426,13 @@ impl RedisCommand {
                     }
                 }
                 RedisCommand::Replconf(_fi, _se) => Value::String("OK".into()),
-                RedisCommand::PSync(_fi, _se) => {
-                    Value::String(format!("FULLRESYNC {} {}", REPL_ID, REPL_OFFSET).into())
-                }
+                RedisCommand::PSync(_fi, _se) => Value::Batch(
+                    [
+                        Value::String(format!("FULLRESYNC {} {}", REPL_ID, REPL_OFFSET).into()),
+                        Value::RawBinary(b"$0\r\n"),
+                    ]
+                    .into(),
+                ),
             }
         })
     }

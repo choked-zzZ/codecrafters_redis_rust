@@ -21,6 +21,8 @@ pub enum Value {
     NullArray,
     Boolean(bool),
     Stream(Stream),
+    Batch(Vec<Value>),
+    RawBinary(&'static [u8]),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
@@ -307,6 +309,8 @@ impl Value {
                 dst.extend_from_slice(if *boolean { b"#t\r\n" } else { b"#f\r\n" });
             }
             Value::Stream(..) => todo!(),
+            Value::Batch(batch) => batch.iter().for_each(|x| x.encode(dst)),
+            Value::RawBinary(raw) => dst.extend_from_slice(raw),
         }
     }
 }

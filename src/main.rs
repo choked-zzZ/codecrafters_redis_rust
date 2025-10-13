@@ -101,7 +101,6 @@ async fn replica_handler(addr: String, args: &Arc<Args>) {
         );
         framed.send(&psync).await.unwrap();
         framed.next().await;
-        framed.into_inner().write_all(b"$0\r\n").await.unwrap();
     }
 }
 
