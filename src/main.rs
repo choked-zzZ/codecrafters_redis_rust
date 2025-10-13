@@ -1,11 +1,9 @@
 use clap::Parser;
 use futures::lock::Mutex;
-use futures::task::waker;
 use futures::SinkExt;
 use futures::StreamExt;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
 
@@ -92,20 +90,20 @@ async fn replica_handler(addr: String, args: &Arc<Args>) {
 
 #[tokio::main]
 async fn main() {
-    let args = Arc::new(Args::parse());
-    let listener = TcpListener::bind(format!("127.0.0.1:{}", args.port))
-        .await
-        .unwrap();
-    eprintln!("1");
-    let env = Arc::new(Mutex::new(Env::default()));
-    let args_1 = args.clone();
-    if let Some(addr) = &args.replicaof {
-        let addr = addr.clone();
-        tokio::spawn(async move {
-            replica_handler(addr, &args_1).await;
-        });
-    }
     loop {
+        let args = Arc::new(Args::parse());
+        let listener = TcpListener::bind(format!("127.0.0.1:{}", args.port))
+            .await
+            .unwrap();
+        eprintln!("1");
+        let env = Arc::new(Mutex::new(Env::default()));
+        let args_1 = args.clone();
+        if let Some(addr) = &args.replicaof {
+            let addr = addr.clone();
+            tokio::spawn(async move {
+                replica_handler(addr, &args_1).await;
+            });
+        }
         let (stream, addr) = listener
             .accept()
             .await
