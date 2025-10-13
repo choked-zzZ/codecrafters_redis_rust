@@ -1,5 +1,6 @@
 use clap::Parser;
 use futures::lock::Mutex;
+use futures::task::waker;
 use futures::SinkExt;
 use futures::StreamExt;
 use std::net::SocketAddr;
@@ -34,21 +35,6 @@ async fn connection_handler(
 ) {
     let mut framed = Framed::new(stream, RespParser);
 
-    eprintln!("enter1.");
-    if let Some(ref _addr) = args.replicaof {
-        eprintln!("enter2.");
-        let addr: SocketAddr = "127.0.0.1:6379".parse().unwrap();
-        eprintln!("send.");
-        let handshake_stream = TcpStream::connect(addr).await.expect("Connect failed.");
-        let mut handshake_framed = Framed::new(handshake_stream, RespParser);
-        eprintln!("hs1");
-        handshake_framed
-            .send(&Value::Array([Value::BulkString("PING".into())].into()))
-            .await
-            .expect("send failed.");
-        eprintln!("suc");
-    }
-
     while let Some(result) = framed.next().await {
         match result {
             Ok(value) => {
@@ -71,6 +57,39 @@ async fn connection_handler(
     eprintln!("connection closed.")
 }
 
+async fn replica_handler(addr: String, args: &Arc<Args>) {
+    let part = addr.split_ascii_whitespace().collect::<Vec<_>>();
+    let mut ip = part[0];
+    if ip == "localhost" {
+        ip = "127.0.0.1";
+    }
+    let port = part[1].parse().unwrap();
+    if let Ok(stream) = TcpStream::connect((ip, port)).await {
+        let mut framed = Framed::new(stream, RespParser);
+        let handshake_first = Value::Array([Value::BulkString("PING".into())].into());
+        framed.send(&handshake_first).await.unwrap();
+        framed.next().await;
+        let replconf_1 = Value::Array(
+            [
+                Value::BulkString("REPLCONF".into()),
+                Value::BulkString("listening_port".into()),
+                Value::BulkString(args.port.to_string().into()),
+            ]
+            .into(),
+        );
+        framed.send(&replconf_1).await.unwrap();
+        let replconf_2 = Value::Array(
+            [
+                Value::BulkString("REPLCONF".into()),
+                Value::BulkString("capa".into()),
+                Value::BulkString("psync2".into()),
+            ]
+            .into(),
+        );
+        framed.send(&replconf_2).await.unwrap();
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let args = Arc::new(Args::parse());
@@ -79,21 +98,11 @@ async fn main() {
         .unwrap();
     eprintln!("1");
     let env = Arc::new(Mutex::new(Env::default()));
-    let args = args.clone();
+    let args_1 = args.clone();
     if let Some(addr) = &args.replicaof {
         let addr = addr.clone();
         tokio::spawn(async move {
-            let part = addr.split_ascii_whitespace().collect::<Vec<_>>();
-            let mut ip = part[0];
-            if ip == "localhost" {
-                ip = "127.0.0.1";
-            }
-            let port = part[1].parse().unwrap();
-            if let Ok(stream) = TcpStream::connect((ip, port)).await {
-                let mut framed = Framed::new(stream, RespParser);
-                let handshake_first = Value::Array([Value::BulkString("PING".into())].into());
-                framed.send(&handshake_first).await.unwrap();
-            }
+            replica_handler(addr, &args_1).await;
         });
     }
     loop {
