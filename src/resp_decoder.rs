@@ -22,7 +22,7 @@ pub enum Value {
     Boolean(bool),
     Stream(Stream),
     Batch(Vec<Value>),
-    RawBinary(&'static [u8]),
+    RawBinary(Vec<u8>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]

@@ -10,6 +10,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use bytes::Bytes;
 use futures::lock::Mutex;
 use itertools::Itertools;
+use tokio::fs;
+use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
@@ -426,13 +428,26 @@ impl RedisCommand {
                     }
                 }
                 RedisCommand::Replconf(_fi, _se) => Value::String("OK".into()),
-                RedisCommand::PSync(_fi, _se) => Value::Batch(
-                    [
-                        Value::String(format!("FULLRESYNC {} {}", REPL_ID, REPL_OFFSET).into()),
-                        Value::RawBinary(b"$0\r\n"),
-                    ]
-                    .into(),
-                ),
+                RedisCommand::PSync(_fi, _se) => {
+                    let mut buf = vec![b'$'];
+                    let mut rdb_content = Vec::new();
+                    fs::File::open("../empty.rdb")
+                        .await
+                        .expect("into error.")
+                        .read_buf(&mut rdb_content)
+                        .await
+                        .expect("read_failed");
+                    buf.extend_from_slice(rdb_content.len().to_string().as_bytes());
+                    buf.extend_from_slice(b"\r\n");
+                    buf.append(&mut rdb_content);
+                    Value::Batch(
+                        [
+                            Value::String(format!("FULLRESYNC {} {}", REPL_ID, REPL_OFFSET).into()),
+                            Value::RawBinary(buf),
+                        ]
+                        .into(),
+                    )
+                }
             }
         })
     }
