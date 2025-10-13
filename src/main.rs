@@ -41,11 +41,11 @@ async fn connection_handler(
     while let Some(result) = framed.next().await {
         match result {
             Ok(value) => {
-                eprintln!("recieved: {value:?} from addr {addr:?}");
+                eprintln!("address {addr} get recieved: {value:?}");
                 let value = Arc::new(value);
                 let command = RedisCommand::parse_command(value.clone());
                 let response = command.clone().exec(env.clone(), addr, args.clone()).await;
-                eprintln!("will send back: {response:?}");
+                eprintln!("{addr} will send back: {response:?}");
                 if let Err(e) = framed.send(&response).await {
                     eprintln!("carsh into error: {e}");
                     eprintln!("connection closed.");
@@ -88,6 +88,7 @@ async fn replica_handler(addr: String, args: &Arc<Args>, env: Arc<Mutex<Env>>) {
     let ip = [127u8, 0, 0, 1];
     let port = part[1].parse().unwrap();
     let addr = SocketAddr::new(std::net::IpAddr::from(ip), port);
+    eprintln!("{addr} goes in replica handler");
     if let Ok(stream) = TcpStream::connect(addr).await {
         let mut framed = Framed::new(stream, RespParser);
         let handshake_first = Value::Array([Value::BulkString("PING".into())].into());
