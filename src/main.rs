@@ -4,6 +4,7 @@ use futures::SinkExt;
 use futures::StreamExt;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
 
@@ -100,6 +101,7 @@ async fn replica_handler(addr: String, args: &Arc<Args>) {
         );
         framed.send(&psync).await.unwrap();
         framed.next().await;
+        framed.into_inner().write_all(b"$0\r\n").await.unwrap();
     }
 }
 
