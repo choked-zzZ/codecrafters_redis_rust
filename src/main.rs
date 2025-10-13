@@ -134,13 +134,6 @@ async fn replica_handler(addr: String, args: &Arc<Args>, env: Arc<Mutex<Env>>) {
                     if matches!(command, RedisCommand::PSync(..)) {
                         break;
                     }
-                    if command.can_modify() {
-                        let mut env = env.lock().await;
-                        for replica in env.replicas.iter_mut() {
-                            replica.send(&value).await.expect("send error.");
-                            eprintln!("send a command");
-                        }
-                    }
                 }
                 Err(e) => {
                     eprintln!("get error {e:?}");
