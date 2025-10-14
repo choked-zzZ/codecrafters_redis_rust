@@ -512,7 +512,10 @@ impl RedisCommand {
                                                 .as_integer()
                                                 .unwrap()
                                                 as usize;
-                                            eprintln!("this replica got ack with {ack}");
+                                            eprintln!(
+                                                "this replica got ack with {ack} meet? {}",
+                                                ack == ack_master_current
+                                            );
                                             if ack == ack_master_current {
                                                 count += 1;
                                             }
