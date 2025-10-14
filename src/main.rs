@@ -49,10 +49,12 @@ async fn connection_handler(
                     eprintln!("connection closed.");
                     return;
                 }
+                let mut env = env.lock().await;
                 if matches!(command, RedisCommand::PSync(..)) {
+                    env.ack -= 14 + 48;
+                    eprintln!("handshake over, ack now drop to {}", env.ack);
                     break;
                 }
-                let mut env = env.lock().await;
                 if command.can_modify() {
                     for replica in env.replicas.iter_mut() {
                         replica.send(&value).await.expect("send error.");
@@ -66,10 +68,8 @@ async fn connection_handler(
                     value.buf_size(),
                     env.ack
                 );
-                if matches!(command, RedisCommand::PSync(..)) {
-                    env.ack -= 14 + 48 + 40;
-                    eprintln!("handshake over, ack now drop to {}", env.ack)
-                }
+                // if matches!(command, RedisCommand::PSync(..)) {
+                // }
             }
             Err(e) => {
                 eprintln!("failed to decode frame: {e:?}");
