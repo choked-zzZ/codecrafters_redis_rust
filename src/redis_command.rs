@@ -498,6 +498,8 @@ impl RedisCommand {
                         let ack_master_current = env.ack;
                         for replica in env.replicas.iter_mut() {
                             replica.send(&command).await.expect("send error.");
+                        }
+                        for replica in env.replicas.iter_mut() {
                             while let Some(result) = replica.next().await {
                                 match result {
                                     Err(e) => eprintln!("got error: {e:?}"),
