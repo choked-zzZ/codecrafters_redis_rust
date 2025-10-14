@@ -497,23 +497,25 @@ impl RedisCommand {
                         );
                         let ack_master_current = env.ack;
                         eprintln!("the ack need to match the number {ack_master_current}");
-                        for replica in env.replicas.iter_mut() {
+                        for (cnt, replica) in env.replicas.iter_mut().enumerate() {
                             replica.send(&command).await.expect("send error.");
-                            if let Some(result) = replica.next().await {
-                                match result {
-                                    Err(e) => eprintln!("got error: {e:?}"),
-                                    Ok(val) => {
-                                        let ack = val
-                                            .as_array()
-                                            .unwrap()
-                                            .get(2)
-                                            .unwrap()
-                                            .as_integer()
-                                            .unwrap()
-                                            as usize;
-                                        eprintln!("this replica got ack with {ack}");
-                                        if ack == ack_master_current {
-                                            count += 1;
+                            if cnt < replicas_count as usize {
+                                if let Some(result) = replica.next().await {
+                                    match result {
+                                        Err(e) => eprintln!("got error: {e:?}"),
+                                        Ok(val) => {
+                                            let ack = val
+                                                .as_array()
+                                                .unwrap()
+                                                .get(2)
+                                                .unwrap()
+                                                .as_integer()
+                                                .unwrap()
+                                                as usize;
+                                            eprintln!("this replica got ack with {ack}");
+                                            if ack == ack_master_current {
+                                                count += 1;
+                                            }
                                         }
                                     }
                                 }
