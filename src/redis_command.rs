@@ -592,8 +592,8 @@ impl RedisCommand {
                         if length == 0xFE {
                             break;
                         }
-                        let mut buf = Vec::with_capacity(length as usize);
-                        fp.read_buf(&mut buf).await.unwrap();
+                        let mut buf = vec![0; length as usize];
+                        fp.read_exact(&mut buf).await.unwrap();
                         metadata.push(buf);
                     }
                     let index = fp.read_u8().await.unwrap();
