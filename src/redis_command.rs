@@ -14,6 +14,7 @@ use futures::lock::Mutex;
 use futures::{SinkExt, StreamExt};
 use itertools::Itertools;
 use regex::Regex;
+use tokio::io::AsyncReadExt;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 
@@ -50,6 +51,7 @@ pub enum RedisCommand {
     PSync(Value, Value),
     Wait(u32, u64),
     Keys(Value),
+    Config(Value, Value),
 }
 
 impl RedisCommand {
@@ -539,12 +541,63 @@ impl RedisCommand {
                         Ok(val) => val,
                     }
                 }
+                RedisCommand::Config(operation, target) => {
+                    let operation = str::from_utf8(operation.as_bulk_string().unwrap()).unwrap().to_ascii_uppercase();
+                    if operation == "GET" {
+                        let op_target = str::from_utf8(target.as_bulk_string().unwrap()).unwrap().to_ascii_uppercase();
+                        if op_target == "DIR" {
+                            let dir = Value::BulkString(args.dir.clone().into());
+                            Value::Array([
+                                target,
+                                dir
+                            ].into())
+                        } else {
+                            todo!()
+                        }
+                    }else {
+                        todo!()
+                    }
+                }
                 RedisCommand::Keys(pattern) => {
-                    // let pattern = str::from_utf8(pattern.as_bulk_string().unwrap()).unwrap();
-                    // let re = Regex::new(pattern).unwrap();
-                    // let path = Path::new(args.dir);
-                    // path
-                    // let buf = std::fs::read();
+                    let pattern = str::from_utf8(pattern.as_bulk_string().unwrap()).unwrap();
+                    let re = Regex::new(pattern).unwrap();
+
+                    let mut dir = args.dir.clone();
+                    dir.push_str(&args.dbfilename);
+                    let path = Path::new(&dir);
+                    if !path.exists() {
+                        tokio::fs::write(path, STANDARD.decode("UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==").unwrap()).await.unwrap();
+                    }
+                    let mut fp = tokio::fs::OpenOptions::new()
+                        .read(true)
+                        .open(path)
+                        .await
+                        .expect("File pointer create failed.");
+
+                    let mut header = [0; 9];
+                    fp.read_exact(&mut header)
+                        .await
+                        .expect("read header failed");
+                    assert_eq!(&header, b"REDIS0011");
+                    assert_eq!(fp.read_u16().await.unwrap(), 0xFE);
+                    let mut metadata = Vec::new();
+                    loop {
+                        let length = fp.read_u16().await.unwrap();
+                        if length == 0xFA {
+                            break;
+                        }
+                        let mut buf = Vec::with_capacity(length as usize);
+                        fp.read_buf(&mut buf).await.unwrap();
+                        metadata.push(buf);
+                    }
+                    let index = fp.read_u16().await.unwrap();
+                    assert_eq!(fp.read_u16().await.unwrap(), 0xFB);
+                    let kvp_count = fp.read_u16().await.unwrap();
+                    let expiry_count = fp.read_u16().await.unwrap();
+                    let mut data = Vec::new();
+                    loop {
+                        let
+                    }
 
                     todo!()
                 }
@@ -726,6 +779,11 @@ impl RedisCommand {
                     "KEYS" => {
                         let pattern = arr.get(1).unwrap().clone();
                         RedisCommand::Keys(pattern)
+                    }
+                    "CONFIG" => {
+                        let operation = arr.get(1).unwrap().clone();
+                        let target = arr.get(2).unwrap().clone();
+                        RedisCommand::Config(operation, target)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
