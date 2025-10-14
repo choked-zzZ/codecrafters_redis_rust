@@ -28,10 +28,10 @@ struct Args {
     replicaof: Option<String>,
 
     #[arg(long)]
-    dir: String,
+    dir: Option<String>,
 
     #[arg(long)]
-    dbfilename: String,
+    dbfilename: Option<String>,
 }
 
 async fn connection_handler(
