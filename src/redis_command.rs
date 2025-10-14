@@ -580,10 +580,10 @@ impl RedisCommand {
                         .await
                         .expect("read header failed");
                     assert_eq!(&header, b"REDIS0011");
-                    assert_eq!(fp.read_u16().await.unwrap(), 0xFA);
+                    assert_eq!(fp.read_u8().await.unwrap(), 0xFA);
                     let mut metadata = Vec::new();
                     loop {
-                        let length = fp.read_u16().await.unwrap();
+                        let length = fp.read_u8().await.unwrap();
                         if length == 0xFE {
                             break;
                         }
@@ -591,13 +591,13 @@ impl RedisCommand {
                         fp.read_buf(&mut buf).await.unwrap();
                         metadata.push(buf);
                     }
-                    let index = fp.read_u16().await.unwrap();
-                    assert_eq!(fp.read_u16().await.unwrap(), 0xFB);
-                    let kvp_count = fp.read_u16().await.unwrap();
-                    let expiry_count = fp.read_u16().await.unwrap();
+                    let index = fp.read_u8().await.unwrap();
+                    assert_eq!(fp.read_u8().await.unwrap(), 0xFB);
+                    let kvp_count = fp.read_u8().await.unwrap();
+                    let expiry_count = fp.read_u8().await.unwrap();
                     let mut data = VecDeque::new();
                     loop {
-                        let mut indicator = fp.read_u16().await.unwrap();
+                        let mut indicator = fp.read_u8().await.unwrap();
                         let mut skip = false;
                         match indicator {
                             0xFF => break,
@@ -610,7 +610,7 @@ impl RedisCommand {
                                 if expire_milisecs as u128 >= milisecs_to_now {
                                     skip = true;
                                 }
-                                indicator = fp.read_u16().await.unwrap();
+                                indicator = fp.read_u8().await.unwrap();
                             }
                             0xFD => {
                                 let expire_secs = fp.read_u32_le().await.unwrap();
@@ -621,11 +621,11 @@ impl RedisCommand {
                                 if expire_secs as u64 >= secs_to_now {
                                     skip = true;
                                 }
-                                indicator = fp.read_u16().await.unwrap();
+                                indicator = fp.read_u8().await.unwrap();
                             }
                             _ => {}
                         }
-                        let len = fp.read_u16().await.unwrap();
+                        let len = fp.read_u8().await.unwrap();
                         let mut key = vec![0; len as usize];
                         let matched = re.is_match(
                             str::from_utf8(&key).expect("not a valid utf-8 encoded string"),
@@ -633,7 +633,7 @@ impl RedisCommand {
                         fp.read_exact(&mut key).await.unwrap();
                         match indicator {
                             0x00 => {
-                                let len = fp.read_u16().await.unwrap();
+                                let len = fp.read_u8().await.unwrap();
                                 let mut val = vec![0; len as usize];
                                 fp.read_exact(&mut val).await.unwrap();
                                 if matched {
