@@ -52,14 +52,15 @@ async fn connection_handler(
                 if matches!(command, RedisCommand::PSync(..)) {
                     break;
                 }
+                let mut env = env.lock().await;
                 if command.can_modify() {
-                    let mut env = env.lock().await;
                     for replica in env.replicas.iter_mut() {
                         replica.send(&value).await.expect("send error.");
                         eprintln!("send a command {command:?} to one replica");
                     }
                     eprintln!("command {command:?} send completed");
                 }
+                env.ack += value.buf_size();
             }
             Err(e) => {
                 eprintln!("failed to decode frame: {e:?}");
