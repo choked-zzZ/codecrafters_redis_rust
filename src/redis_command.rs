@@ -481,8 +481,9 @@ impl RedisCommand {
                     if replicas_count == 0 {
                         return Value::Integer(0);
                     }
-                    let mut count = 0;
-                    timeout(Duration::from_millis(wait_milisecs), async move {
+                    let satisified_count = Arc::new(Mutex::new(0));
+                    let count = Arc::clone(&satisified_count);
+                    let handle = async move {
                         let mut env = env.lock().await;
                         if env.ack == 0 {
                             return Value::Integer(env.replicas.len() as i64);
@@ -517,7 +518,7 @@ impl RedisCommand {
                                                 ack == ack_master_current
                                             );
                                             if ack == ack_master_current {
-                                                count += 1;
+                                                *count.lock().await += 1;
                                             }
                                         }
                                     }
@@ -525,10 +526,15 @@ impl RedisCommand {
                             }
                         }
                         env.ack += command.buf_size();
-                        Value::Integer(count)
-                    })
-                    .await
-                    .unwrap_or(Value::Integer(count))
+                        return Value::Integer(*count.lock().await);
+                    };
+                    match timeout(Duration::from_millis(wait_milisecs), handle).await {
+                        Err(_) => {
+                            let final_val = *satisified_count.lock().await;
+                            Value::Integer(final_val)
+                        }
+                        Ok(val) => val,
+                    }
                 }
             }
         })
