@@ -1,5 +1,6 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};
+use std::fs;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::ops::Bound::{Excluded, Unbounded};
@@ -572,6 +573,7 @@ impl RedisCommand {
                         eprintln!("file not exist");
                         tokio::fs::write(path, STANDARD.decode("UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==").unwrap()).await.unwrap();
                     }
+                    eprintln!("{:?}", fs::read(path));
                     let mut fp = tokio::fs::OpenOptions::new()
                         .read(true)
                         .open(path)
