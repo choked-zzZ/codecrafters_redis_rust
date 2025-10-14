@@ -45,6 +45,7 @@ pub enum RedisCommand {
     Info(Bytes),
     Replconf(Value, Value),
     PSync(Value, Value),
+    Wait(u32, u64),
 }
 
 impl RedisCommand {
@@ -475,6 +476,7 @@ impl RedisCommand {
                         .into(),
                     )
                 }
+                RedisCommand::Wait(replicas_count, wait_milisecs) => Value::Integer(0),
             }
         })
     }
@@ -644,6 +646,11 @@ impl RedisCommand {
                         let fi = arr.get(1).unwrap().clone();
                         let se = arr.get(2).unwrap().clone();
                         RedisCommand::PSync(fi, se)
+                    }
+                    "WAIT" => {
+                        let replica_count = arr.get(1).unwrap().as_integer().unwrap() as u32;
+                        let wait_milisecs = arr.get(2).unwrap().as_integer().unwrap() as u64;
+                        RedisCommand::Wait(replica_count, wait_milisecs)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
