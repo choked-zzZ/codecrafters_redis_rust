@@ -481,12 +481,12 @@ impl RedisCommand {
                     if replicas_count == 0 {
                         return Value::Integer(0);
                     }
-                    sleep(Duration::from_millis(wait_milisecs)).await;
-                    let mut env = env.lock().await;
-                    if env.ack == 0 {
-                        Value::Integer(env.replicas.len() as i64)
-                    } else {
-                        let mut count = 0;
+                    let mut count = 0;
+                    timeout(Duration::from_millis(wait_milisecs), async move {
+                        let mut env = env.lock().await;
+                        if env.ack == 0 {
+                            return Value::Integer(env.replicas.len() as i64);
+                        }
                         let command = Value::Array(
                             [
                                 Value::BulkString("REPLCONF".into()),
@@ -522,7 +522,9 @@ impl RedisCommand {
                             }
                         }
                         Value::Integer(count)
-                    }
+                    })
+                    .await
+                    .unwrap_or(Value::Integer(count))
                 }
             }
         })
