@@ -561,7 +561,7 @@ impl RedisCommand {
                 }
                 RedisCommand::Keys(pattern) => {
                     let pattern = str::from_utf8(pattern.as_bulk_string().unwrap()).unwrap();
-                    let re = Regex::new(pattern).unwrap();
+                    let re = Regex::new(".").unwrap();
 
                     let mut dir = args.dir.clone().unwrap();
                     dir.push_str(args.dbfilename.as_ref().unwrap());
