@@ -1,9 +1,7 @@
 use clap::Parser;
-use futures::lock;
 use futures::lock::Mutex;
 use futures::SinkExt;
 use futures::StreamExt;
-use std::collections::hash_map::Entry;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
@@ -58,8 +56,9 @@ async fn connection_handler(
                     let mut env = env.lock().await;
                     for replica in env.replicas.iter_mut() {
                         replica.send(&value).await.expect("send error.");
-                        eprintln!("send a command");
+                        eprintln!("send a command {command:?} to one replica");
                     }
+                    eprintln!("command {command:?} send completed");
                 }
             }
             Err(e) => {

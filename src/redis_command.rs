@@ -441,7 +441,25 @@ impl RedisCommand {
                         _ => todo!(),
                     }
                 }
-                RedisCommand::Replconf(_fi, _se) => Value::String("OK".into()),
+                RedisCommand::Replconf(fi, _se) => {
+                    if str::from_utf8(&fi.into_bytes())
+                        .unwrap()
+                        .to_ascii_uppercase()
+                        .as_str()
+                        == "GETACK"
+                    {
+                        Value::Array(
+                            [
+                                Value::BulkString("REPLCONF".into()),
+                                Value::BulkString("ACK".into()),
+                                Value::BulkString("0".into()),
+                            ]
+                            .into(),
+                        )
+                    } else {
+                        Value::String("OK".into())
+                    }
+                }
                 RedisCommand::PSync(_fi, _se) => {
                     let mut buf = vec![b'$'];
                     let mut rdb_content = STANDARD.decode("UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==").expect("decode_err");
@@ -517,7 +535,7 @@ impl RedisCommand {
                     "RPUSH" => {
                         assert!(arr.len() >= 3);
                         let list_key = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
-                        let items = arr.into_iter().skip(2).map(|x| x.clone()).collect();
+                        let items = arr.iter().skip(2).cloned().collect();
                         RedisCommand::RPush(list_key, items)
                     }
                     "LRANGE" => {
@@ -530,7 +548,7 @@ impl RedisCommand {
                     "LPUSH" => {
                         assert!(arr.len() >= 3);
                         let list_key = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
-                        let items = arr.into_iter().skip(2).map(|x| x.clone()).collect();
+                        let items = arr.iter().skip(2).cloned().collect();
                         RedisCommand::LPush(list_key, items)
                     }
                     "LLEN" => {
@@ -584,11 +602,7 @@ impl RedisCommand {
                                     .take(streams_count)
                                     .map(|x| x.as_bulk_string().unwrap().clone())
                                     .collect();
-                                let id = arr
-                                    .iter()
-                                    .skip(2 + streams_count)
-                                    .map(|x| x.clone())
-                                    .collect();
+                                let id = arr.iter().skip(2 + streams_count).cloned().collect();
                                 RedisCommand::XRead(key, id)
                             }
                             "BLOCK" => {
@@ -601,11 +615,7 @@ impl RedisCommand {
                                     .take(streams_count)
                                     .map(|x| x.as_bulk_string().unwrap().clone())
                                     .collect();
-                                let id = arr
-                                    .iter()
-                                    .skip(4 + streams_count)
-                                    .map(|x| x.clone())
-                                    .collect();
+                                let id = arr.iter().skip(4 + streams_count).cloned().collect();
                                 eprintln!("{block_milisec} and {key:?} and {id:?}");
                                 RedisCommand::BXRead(key, block_milisec, id)
                             }
