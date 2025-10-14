@@ -60,10 +60,15 @@ async fn connection_handler(
                     }
                     eprintln!("command {command:?} send completed");
                 }
-                eprintln!("command {command:?} contribute size {}", value.buf_size());
                 env.ack += value.buf_size();
+                eprintln!(
+                    "command {command:?} contribute size {} and now comes to {}",
+                    value.buf_size(),
+                    env.ack
+                );
                 if matches!(command, RedisCommand::PSync(..)) {
                     env.ack -= 14 + 48 + 40;
+                    eprintln!("handshake over, ack now drop to {}", env.ack)
                 }
             }
             Err(e) => {
