@@ -12,7 +12,7 @@ use bytes::Bytes;
 use futures::lock::Mutex;
 use itertools::Itertools;
 use tokio::sync::oneshot;
-use tokio::time::timeout;
+use tokio::time::{sleep, timeout};
 
 use crate::env::WaitFor;
 use crate::resp_decoder::{Stream, StreamID};
@@ -476,7 +476,10 @@ impl RedisCommand {
                         .into(),
                     )
                 }
-                RedisCommand::Wait(replicas_count, wait_milisecs) => Value::Integer(0),
+                RedisCommand::Wait(replicas_count, wait_milisecs) => {
+                    sleep(Duration::from_millis(wait_milisecs)).await;
+                    Value::Integer(env.lock().await.replicas.len() as i64)
+                }
             }
         })
     }

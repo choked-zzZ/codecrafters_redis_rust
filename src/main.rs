@@ -78,7 +78,7 @@ async fn replica_handler(addr: String, args: &Arc<Args>, env: Arc<Mutex<Env>>) {
     let ip = [127u8, 0, 0, 1];
     let port = part[1].parse().unwrap();
     let addr = SocketAddr::new(std::net::IpAddr::from(ip), port);
-    eprintln!("{addr} goes in replica handler");
+    eprintln!("127.0.0.1:{} goes in replica handler", args.port);
     if let Ok(stream) = TcpStream::connect(addr).await {
         let mut framed = Framed::new(stream, RespParser);
         let handshake_first = Value::Array([Value::BulkString("PING".into())].into());
