@@ -122,6 +122,7 @@ async fn replica_handler(addr: String, args: &Arc<Args>, env: Arc<Mutex<Env>>) {
                     let value = Arc::new(value);
                     let command = RedisCommand::parse_command(value.clone());
                     let response = command.clone().exec(env.clone(), addr, args.clone()).await;
+                    env.lock().await.ack += value.buf_size();
                     if !command.can_modify() {
                         eprintln!("{addr} will send back: {response:?}");
                         if let Err(e) = framed.send(&response).await {

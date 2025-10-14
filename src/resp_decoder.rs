@@ -269,6 +269,18 @@ impl From<io::Error> for RESPError {
 }
 
 impl Value {
+    pub fn buf_size(&self) -> usize {
+        match self {
+            Value::String(s) => 3 + s.len(),
+            Value::Error(msg) => 3 + msg.len(),
+            Value::Integer(int) => todo!(),
+            Value::BulkString(s) => 6 + s.len(),
+            Value::Array(arr) => 3 + 1 + arr.iter().map(|x| x.buf_size()).sum::<usize>(),
+            Value::NullArray => 4,
+            _ => todo!(),
+        }
+    }
+
     fn encode(&self, dst: &mut BytesMut) {
         match self {
             Value::String(s) => {

@@ -452,7 +452,7 @@ impl RedisCommand {
                             [
                                 Value::BulkString("REPLCONF".into()),
                                 Value::BulkString("ACK".into()),
-                                Value::BulkString("0".into()),
+                                Value::BulkString(env.lock().await.ack.to_string().into()),
                             ]
                             .into(),
                         )

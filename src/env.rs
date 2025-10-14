@@ -21,6 +21,7 @@ pub struct Env {
     pub waitlist: HashMap<Arc<Bytes>, VecDeque<WaitFor>>,
     pub in_transaction: HashMap<SocketAddr, Vec<RedisCommand>>,
     pub replicas: Vec<Framed<TcpStream, RespParser>>,
+    pub ack: usize,
 }
 
 #[derive(Debug)]
