@@ -477,6 +477,9 @@ impl RedisCommand {
                     )
                 }
                 RedisCommand::Wait(replicas_count, wait_milisecs) => {
+                    if replicas_count == 0 {
+                        return Value::Integer(0);
+                    }
                     sleep(Duration::from_millis(wait_milisecs)).await;
                     Value::Integer(env.lock().await.replicas.len() as i64)
                 }
