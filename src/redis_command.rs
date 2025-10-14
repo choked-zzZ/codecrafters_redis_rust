@@ -521,6 +521,7 @@ impl RedisCommand {
                                 }
                             }
                         }
+                        env.ack += command.buf_size();
                         Value::Integer(count)
                     })
                     .await
