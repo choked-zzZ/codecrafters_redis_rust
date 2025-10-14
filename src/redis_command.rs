@@ -573,7 +573,7 @@ impl RedisCommand {
                         eprintln!("file not exist");
                         tokio::fs::write(path, STANDARD.decode("UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==").unwrap()).await.unwrap();
                     }
-                    eprintln!("{:?}", fs::read(path));
+                    eprintln!("{:x?}", fs::read(path));
                     let mut fp = tokio::fs::OpenOptions::new()
                         .read(true)
                         .open(path)
