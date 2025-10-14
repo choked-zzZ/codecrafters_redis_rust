@@ -496,6 +496,7 @@ impl RedisCommand {
                             .into(),
                         );
                         let ack_master_current = env.ack;
+                        eprintln!("the ack need to match the number {ack_master_current}");
                         for replica in env.replicas.iter_mut() {
                             replica.send(&command).await.expect("send error.");
                             if let Some(result) = replica.next().await {
@@ -510,6 +511,7 @@ impl RedisCommand {
                                             .as_integer()
                                             .unwrap()
                                             as usize;
+                                        eprintln!("this replica got ack with {ack}");
                                         if ack == ack_master_current {
                                             count += 1;
                                         }
