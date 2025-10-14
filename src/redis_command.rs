@@ -550,7 +550,7 @@ impl RedisCommand {
                             .unwrap()
                             .to_ascii_uppercase();
                         if op_target == "DIR" {
-                            let dir = Value::BulkString(args.dir.clone().into());
+                            let dir = Value::BulkString(args.dir.clone().unwrap().into());
                             Value::Array([target, dir].into())
                         } else {
                             todo!()
