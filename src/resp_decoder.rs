@@ -361,9 +361,14 @@ fn bulk_string(buf: &BytesMut, pos: usize) -> RedisResult {
             let total_size = pos + size as usize;
             if buf.len() < total_size + 2 {
                 Ok(None)
-            } else {
+            } else if &buf[total_size..total_size + 2] == b"\r\n" {
                 Ok(Some((
                     total_size + 2,
+                    ValueBufSplit::BulkString(BufSplit(pos, total_size)),
+                )))
+            } else {
+                Ok(Some((
+                    total_size,
                     ValueBufSplit::BulkString(BufSplit(pos, total_size)),
                 )))
             }
