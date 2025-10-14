@@ -566,7 +566,9 @@ impl RedisCommand {
                     let mut dir = args.dir.clone().unwrap();
                     dir.push_str(args.dbfilename.as_ref().unwrap());
                     let path = Path::new(&dir);
+                    eprintln!("file path: {:?}", path);
                     if !path.exists() {
+                        eprintln!("file not exist");
                         tokio::fs::write(path, STANDARD.decode("UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==").unwrap()).await.unwrap();
                     }
                     let mut fp = tokio::fs::OpenOptions::new()
