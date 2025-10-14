@@ -54,9 +54,9 @@ async fn connection_handler(
                 }
                 let mut env = env.lock().await;
                 if command.can_modify() {
-                    for replica in env.replicas.iter_mut() {
-                        replica.send(&value).await.expect("send error.");
-                        eprintln!("send a command {command:?} to one replica");
+                    for replica in env.replicas.iter_mut().enumerate() {
+                        replica.1.send(&value).await.expect("send error.");
+                        eprintln!("send a command {command:?} to one replica {}", replica.0);
                     }
                     eprintln!("command {command:?} send completed");
                 }
