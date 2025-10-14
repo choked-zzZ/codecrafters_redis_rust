@@ -54,9 +54,9 @@ async fn connection_handler(
                 }
                 let mut env = env.lock().await;
                 if command.can_modify() {
-                    for replica in env.replicas.iter_mut().enumerate() {
-                        replica.1.send(&value).await.expect("send error.");
-                        eprintln!("send a command {command:?} to one replica {}", replica.0);
+                    for replica in env.replicas.iter_mut() {
+                        replica.send(&value).await.expect("send error.");
+                        eprintln!("send a command {command:?} to one replica");
                     }
                     eprintln!("command {command:?} send completed");
                 }
@@ -64,6 +64,7 @@ async fn connection_handler(
                     command,
                     RedisCommand::PSync(..) | RedisCommand::Replconf(..)
                 ) {
+                    eprintln!("command {command:?} contribute size {}", value.buf_size());
                     env.ack += value.buf_size();
                 }
             }
