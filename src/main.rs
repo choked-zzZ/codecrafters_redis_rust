@@ -51,7 +51,7 @@ async fn connection_handler(
                 }
                 let mut env = env.lock().await;
                 if matches!(command, RedisCommand::PSync(..)) {
-                    env.ack -= 14 + 48;
+                    env.ack -= 14 + 48 + 40;
                     eprintln!("handshake over, ack now drop to {}", env.ack);
                     break;
                 }
