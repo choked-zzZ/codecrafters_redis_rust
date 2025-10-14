@@ -62,7 +62,9 @@ async fn connection_handler(
                 }
                 eprintln!("command {command:?} contribute size {}", value.buf_size());
                 env.ack += value.buf_size();
-                if !matches!(command, RedisCommand::PSync(..)) {}
+                if !matches!(command, RedisCommand::PSync(..)) {
+                    env.ack -= 14 + 48 + 40;
+                }
             }
             Err(e) => {
                 eprintln!("failed to decode frame: {e:?}");
