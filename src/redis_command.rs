@@ -10,6 +10,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use bytes::Bytes;
 use futures::lock::Mutex;
+use futures::{SinkExt, StreamExt};
 use itertools::Itertools;
 use tokio::sync::oneshot;
 use tokio::time::{sleep, timeout};
@@ -481,7 +482,43 @@ impl RedisCommand {
                         return Value::Integer(0);
                     }
                     sleep(Duration::from_millis(wait_milisecs)).await;
-                    Value::Integer(env.lock().await.replicas.len() as i64)
+                    let mut env = env.lock().await;
+                    if env.ack == 0 {
+                        Value::Integer(env.replicas.len() as i64)
+                    } else {
+                        let mut count = 0;
+                        let command = Value::Array(
+                            [
+                                Value::BulkString("REPLCONF".into()),
+                                Value::BulkString("GETACK".into()),
+                                Value::BulkString("*".into()),
+                            ]
+                            .into(),
+                        );
+                        let ack_master_current = env.ack;
+                        for replica in env.replicas.iter_mut() {
+                            replica.send(&command).await.expect("send error.");
+                            while let Some(result) = replica.next().await {
+                                match result {
+                                    Err(e) => eprintln!("got error: {e:?}"),
+                                    Ok(val) => {
+                                        let ack = val
+                                            .as_array()
+                                            .unwrap()
+                                            .get(2)
+                                            .unwrap()
+                                            .as_integer()
+                                            .unwrap()
+                                            as usize;
+                                        if ack == ack_master_current {
+                                            count += 1;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Value::Integer(count)
+                    }
                 }
             }
         })
