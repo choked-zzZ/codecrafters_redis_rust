@@ -3,6 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use std::future::Future;
 use std::net::SocketAddr;
 use std::ops::Bound::{Excluded, Unbounded};
+use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -12,8 +13,9 @@ use bytes::Bytes;
 use futures::lock::Mutex;
 use futures::{SinkExt, StreamExt};
 use itertools::Itertools;
+use regex::Regex;
 use tokio::sync::oneshot;
-use tokio::time::{sleep, timeout};
+use tokio::time::timeout;
 
 use crate::env::WaitFor;
 use crate::resp_decoder::{Stream, StreamID};
@@ -47,6 +49,7 @@ pub enum RedisCommand {
     Replconf(Value, Value),
     PSync(Value, Value),
     Wait(u32, u64),
+    Keys(Value),
 }
 
 impl RedisCommand {
@@ -536,6 +539,15 @@ impl RedisCommand {
                         Ok(val) => val,
                     }
                 }
+                RedisCommand::Keys(pattern) => {
+                    // let pattern = str::from_utf8(pattern.as_bulk_string().unwrap()).unwrap();
+                    // let re = Regex::new(pattern).unwrap();
+                    // let path = Path::new(args.dir);
+                    // path
+                    // let buf = std::fs::read();
+
+                    todo!()
+                }
             }
         })
     }
@@ -710,6 +722,10 @@ impl RedisCommand {
                         let replica_count = arr.get(1).unwrap().as_integer().unwrap() as u32;
                         let wait_milisecs = arr.get(2).unwrap().as_integer().unwrap() as u64;
                         RedisCommand::Wait(replica_count, wait_milisecs)
+                    }
+                    "KEYS" => {
+                        let pattern = arr.get(1).unwrap().clone();
+                        RedisCommand::Keys(pattern)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
