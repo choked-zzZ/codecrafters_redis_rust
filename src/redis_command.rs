@@ -564,6 +564,7 @@ impl RedisCommand {
                     let re = Regex::new(".").unwrap();
 
                     let mut dir = args.dir.clone().unwrap();
+                    dir.push('/');
                     dir.push_str(args.dbfilename.as_ref().unwrap());
                     let path = Path::new(&dir);
                     eprintln!("file path: {:?}", path);
