@@ -125,11 +125,24 @@ impl RedisCommand {
                     return Value::String("QUEUED".into());
                 }
             }
-            if env.lock().await.is_in_sub_mode(&addr) && !self.allow_when_subscribe() {
+            let in_sub_mode = env.lock().await.is_in_sub_mode(&addr);
+            if in_sub_mode && !self.allow_when_subscribe() {
                 return Value::Error(format!("ERR Can't execute '{}': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context", self.show()).into());
             }
             match self {
-                RedisCommand::Ping => Value::String("PONG".into()),
+                RedisCommand::Ping => {
+                    if in_sub_mode {
+                        Value::Array(
+                            [
+                                Value::BulkString("pong".into()),
+                                Value::BulkString("".into()),
+                            ]
+                            .into(),
+                        )
+                    } else {
+                        Value::String("PONG".into())
+                    }
+                }
                 RedisCommand::Echo(msg) => msg,
                 RedisCommand::Set(k, v, time) => {
                     let mut env = env.lock().await;
