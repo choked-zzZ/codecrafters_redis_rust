@@ -98,6 +98,7 @@ async fn get_content(fp: &mut File) -> Value {
                 0xC2 => fp.read_u32().await.unwrap(),
                 _ => todo!(),
             };
+            eprintln!("{num}");
             return Value::BulkString(num.to_string().into());
         }
         left => unreachable!("you met {left:x} but you shouldn't..."),
