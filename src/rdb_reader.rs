@@ -75,7 +75,6 @@ pub async fn rbd_reader(path: &Path) -> (Map, Expiry) {
             _ => unreachable!(),
         }
     }
-    assert_eq!(fp.read_u8().await.unwrap(), 0xFF);
     let _crc64_checksum = fp.read_u64().await.unwrap();
     (map, expiry)
 }
