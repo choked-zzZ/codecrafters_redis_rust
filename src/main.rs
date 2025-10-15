@@ -141,6 +141,12 @@ async fn replica_handler(addr: String, args: &Arc<Args>, env: Arc<Mutex<Env>>) {
                     let command = RedisCommand::parse_command(value.clone());
                     let response = command.clone().exec(env.clone(), addr, args.clone()).await;
                     env.lock().await.ack += value.buf_size();
+                    eprintln!(
+                        "127.0.0.1:{} increse ack with {} so it becomes {}",
+                        args.port,
+                        value.buf_size(),
+                        env.lock().await.ack
+                    );
                     if matches!(command, RedisCommand::Replconf(..)) {
                         eprintln!("{addr} will send back: {response:?}");
                         if let Err(e) = framed.send(&response).await {
