@@ -27,7 +27,7 @@ pub struct Env {
     pub replicas: Vec<Framed<TcpStream, RespParser>>,
     pub ack: usize,
     pub file_path: Option<Box<Path>>,
-    pub subscription: HashSet<Arc<Bytes>>,
+    pub subscription: HashMap<SocketAddr, HashSet<Arc<Bytes>>>,
 }
 
 #[derive(Debug)]
