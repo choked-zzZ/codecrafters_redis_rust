@@ -32,6 +32,7 @@ pub async fn rbd_reader(path: &Path) -> (Map, Expiry) {
         match indicator {
             0xFA => continue,
             0xFE => break,
+            0xFF => return (Map::new(), Expiry::new()),
             indi => unreachable!("you met {indi} but you shouldn't"),
         }
     }
