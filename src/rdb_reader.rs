@@ -24,9 +24,6 @@ pub async fn rbd_reader(path: &Path) -> Value {
     loop {
         // TODO: Fix length encoding and string encoding.
         let length = fp.read_u8().await.unwrap();
-        if length == 0xFE {
-            break;
-        }
         eprintln!("metadate key: {length}");
         let mut buf = vec![0; length as usize];
         fp.read_exact(&mut buf).await.unwrap();
@@ -36,6 +33,12 @@ pub async fn rbd_reader(path: &Path) -> Value {
         let mut buf = vec![0; length as usize];
         fp.read_exact(&mut buf).await.unwrap();
         metadata.push(buf);
+        let indicator = fp.read_u8().await.unwrap();
+        match indicator {
+            0xFA => continue,
+            0xFE => break,
+            _ => unreachable!(),
+        }
     }
     let index = fp.read_u8().await.unwrap();
     assert_eq!(fp.read_u8().await.unwrap(), 0xFB);
