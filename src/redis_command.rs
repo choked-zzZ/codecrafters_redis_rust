@@ -486,6 +486,7 @@ impl RedisCommand {
                         eprintln!("the ack need to match the number {ack_master_current}");
                         eprintln!("we got {} replica(s)", env.replicas.len());
                         for (cnt, replica) in env.replicas.iter_mut().enumerate() {
+                            eprintln!("handling replica No.{cnt}");
                             replica.send(&command).await.expect("send error.");
                             if cnt < replicas_count as usize {
                                 if let Some(result) = replica.next().await {
@@ -512,6 +513,7 @@ impl RedisCommand {
                                 }
                             }
                         }
+                        eprintln!("ack progress completed.");
                         env.ack += command.buf_size();
                         return Value::Integer(*count.lock().await);
                     };
