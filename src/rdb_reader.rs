@@ -106,10 +106,7 @@ async fn get_content(fp: &mut File) -> Value {
     let mut content = BytesMut::zeroed(length);
     fp.read_exact(&mut content).await.unwrap();
     let content = content.freeze();
-    #[cfg(debug_assertions)]
-    {
-        let content_string = str::from_utf8(&content).unwrap();
-        eprintln!("{content_string}");
-    }
+    let content_string = str::from_utf8(&content).unwrap();
+    eprintln!("{content_string}");
     Value::BulkString(content)
 }
