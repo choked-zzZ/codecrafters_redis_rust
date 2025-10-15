@@ -51,9 +51,46 @@ pub enum RedisCommand {
     Keys(Value),
     Config(Value, Value),
     Subscribe(Bytes),
+    // Unsubscribe,
+    // PSubscribe,
+    // PUnsubscribe,
+    // Quit,
+    // Reset,
 }
 
 impl RedisCommand {
+    fn show(&self) -> String {
+        match self {
+            Self::Ping => "PING".into(),
+            Self::Echo(_) => "ECHO".into(),
+            Self::Set(_, _, _) => "SET".into(),
+            Self::Get(_) => "GET".into(),
+            Self::RPush(_, _) => "RPUSH".into(),
+            Self::LRange(_, _, _) => "LRANGE".into(),
+            Self::LPush(_, _) => "LPUSH".into(),
+            Self::LLen(_) => "LLEN".into(),
+            Self::LPop(_) => "LPOP".into(),
+            Self::LPopMany(_, _) => "LPOPMANY".into(),
+            Self::BLPop(_, _) => "BLPOP".into(),
+            Self::Type(_) => "TYPE".into(),
+            Self::XAdd(_, _, _) => "XADD".into(),
+            Self::XRange(_, _, _) => "XRANGE".into(),
+            Self::XRead(_, _) => "XREAD".into(),
+            Self::BXRead(_, _, _) => "BXREAD".into(),
+            Self::Incr(_) => "INCR".into(),
+            Self::Multi => "MULTI".into(),
+            Self::Exec => "EXEC".into(),
+            Self::Discard => "DISCARD".into(),
+            Self::Info(_) => "INFO".into(),
+            Self::Replconf(_, _) => "REPLCONF".into(),
+            Self::PSync(_, _) => "PSYNC".into(),
+            Self::Wait(_, _) => "WAIT".into(),
+            Self::Keys(_) => "KEYS".into(),
+            Self::Config(_, _) => "CONFIG".into(),
+            Self::Subscribe(_) => "SUBSCRIBE".into(),
+        }
+    }
+
     pub fn can_modify(&self) -> bool {
         matches!(
             self,
@@ -71,6 +108,10 @@ impl RedisCommand {
         )
     }
 
+    fn allow_when_subscribe(&self) -> bool {
+        matches!(self, RedisCommand::Subscribe(..) | RedisCommand::Ping)
+    }
+
     pub fn exec(
         self,
         env: Arc<Mutex<Env>>,
@@ -83,6 +124,9 @@ impl RedisCommand {
                     transaction.push(self);
                     return Value::String("QUEUED".into());
                 }
+            }
+            if env.lock().await.is_in_sub_mode(&addr) && !self.allow_when_subscribe() {
+                return Value::Error(format!("ERR Can't execute '{}': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context", self.show()).into());
             }
             match self {
                 RedisCommand::Ping => Value::String("PONG".into()),

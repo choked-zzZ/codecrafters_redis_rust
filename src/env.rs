@@ -30,6 +30,12 @@ pub struct Env {
     pub subscription: HashMap<SocketAddr, HashSet<Arc<Bytes>>>,
 }
 
+impl Env {
+    pub fn is_in_sub_mode(&self, addr: &SocketAddr) -> bool {
+        self.subscription.get(addr).is_some_and(|x| !x.is_empty())
+    }
+}
+
 #[derive(Debug)]
 pub enum WaitFor {
     List(Sender<Value>),
