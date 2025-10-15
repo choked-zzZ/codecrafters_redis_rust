@@ -1,5 +1,5 @@
 use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -13,7 +13,7 @@ use bytes::Bytes;
 use futures::lock::Mutex;
 use futures::{SinkExt, StreamExt};
 use itertools::Itertools;
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
 
 use crate::env::{Expiry, Map, WaitFor};
@@ -51,6 +51,7 @@ pub enum RedisCommand {
     Keys(Value),
     Config(Value, Value),
     Subscribe(Bytes),
+    Publish(Bytes, Value),
     // Unsubscribe,
     // PSubscribe,
     // PUnsubscribe,
@@ -61,34 +62,36 @@ pub enum RedisCommand {
 impl RedisCommand {
     fn show(&self) -> String {
         match self {
-            Self::Ping => "PING".into(),
-            Self::Echo(_) => "ECHO".into(),
-            Self::Set(_, _, _) => "SET".into(),
-            Self::Get(_) => "GET".into(),
-            Self::RPush(_, _) => "RPUSH".into(),
-            Self::LRange(_, _, _) => "LRANGE".into(),
-            Self::LPush(_, _) => "LPUSH".into(),
-            Self::LLen(_) => "LLEN".into(),
-            Self::LPop(_) => "LPOP".into(),
-            Self::LPopMany(_, _) => "LPOPMANY".into(),
-            Self::BLPop(_, _) => "BLPOP".into(),
-            Self::Type(_) => "TYPE".into(),
-            Self::XAdd(_, _, _) => "XADD".into(),
-            Self::XRange(_, _, _) => "XRANGE".into(),
-            Self::XRead(_, _) => "XREAD".into(),
-            Self::BXRead(_, _, _) => "BXREAD".into(),
-            Self::Incr(_) => "INCR".into(),
-            Self::Multi => "MULTI".into(),
-            Self::Exec => "EXEC".into(),
-            Self::Discard => "DISCARD".into(),
-            Self::Info(_) => "INFO".into(),
-            Self::Replconf(_, _) => "REPLCONF".into(),
-            Self::PSync(_, _) => "PSYNC".into(),
-            Self::Wait(_, _) => "WAIT".into(),
-            Self::Keys(_) => "KEYS".into(),
-            Self::Config(_, _) => "CONFIG".into(),
-            Self::Subscribe(_) => "SUBSCRIBE".into(),
+            Self::Ping => "PING",
+            Self::Echo(_) => "ECHO",
+            Self::Set(_, _, _) => "SET",
+            Self::Get(_) => "GET",
+            Self::RPush(_, _) => "RPUSH",
+            Self::LRange(_, _, _) => "LRANGE",
+            Self::LPush(_, _) => "LPUSH",
+            Self::LLen(_) => "LLEN",
+            Self::LPop(_) => "LPOP",
+            Self::LPopMany(_, _) => "LPOPMANY",
+            Self::BLPop(_, _) => "BLPOP",
+            Self::Type(_) => "TYPE",
+            Self::XAdd(_, _, _) => "XADD",
+            Self::XRange(_, _, _) => "XRANGE",
+            Self::XRead(_, _) => "XREAD",
+            Self::BXRead(_, _, _) => "BXREAD",
+            Self::Incr(_) => "INCR",
+            Self::Multi => "MULTI",
+            Self::Exec => "EXEC",
+            Self::Discard => "DISCARD",
+            Self::Info(_) => "INFO",
+            Self::Replconf(_, _) => "REPLCONF",
+            Self::PSync(_, _) => "PSYNC",
+            Self::Wait(_, _) => "WAIT",
+            Self::Keys(_) => "KEYS",
+            Self::Config(_, _) => "CONFIG",
+            Self::Subscribe(_) => "SUBSCRIBE",
+            Self::Publish(_, _) => "PUBLISH",
         }
+        .into()
     }
 
     pub fn can_modify(&self) -> bool {
@@ -109,7 +112,10 @@ impl RedisCommand {
     }
 
     fn allow_when_subscribe(&self) -> bool {
-        matches!(self, RedisCommand::Subscribe(..) | RedisCommand::Ping)
+        matches!(
+            self,
+            RedisCommand::Subscribe(..) | RedisCommand::Ping | RedisCommand::Publish(..)
+        )
     }
 
     pub fn exec(
@@ -624,10 +630,13 @@ impl RedisCommand {
                 RedisCommand::Subscribe(subscribe_to) => {
                     let mut env = env.lock().await;
                     let subscribe_to = Arc::new(subscribe_to);
+                    let (tx, rx) = mpsc::channel(32);
                     env.subscription
                         .entry(addr)
-                        .or_insert(HashSet::new())
-                        .insert(subscribe_to.clone());
+                        .or_insert(HashMap::new())
+                        .entry(subscribe_to.clone())
+                        .or_insert(Vec::new())
+                        .push(tx);
                     Value::Array(
                         [
                             Value::BulkString("subscribe".into()),
@@ -636,6 +645,15 @@ impl RedisCommand {
                         ]
                         .into(),
                     )
+                }
+                RedisCommand::Publish(channel, message) => {
+                    let env = env.lock().await;
+                    let senders = env.subscription.get(&addr).unwrap().get(&channel).unwrap();
+                    let publish = senders.len();
+                    for sender in senders {
+                        sender.send(message.clone()).await.unwrap();
+                    }
+                    Value::Integer(publish as i64)
                 }
             }
         })
@@ -824,6 +842,11 @@ impl RedisCommand {
                     "SUBSCRIBE" => {
                         let subscribe_to = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         RedisCommand::Subscribe(subscribe_to)
+                    }
+                    "PUBLISH" => {
+                        let channel = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        let message = arr.get(2).unwrap().clone();
+                        RedisCommand::Publish(channel, message)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }

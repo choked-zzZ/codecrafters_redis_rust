@@ -7,7 +7,10 @@ use std::{
 };
 
 use bytes::Bytes;
-use tokio::{net::TcpStream, sync::oneshot::Sender};
+use tokio::{
+    net::TcpStream,
+    sync::{mpsc, oneshot},
+};
 use tokio_util::codec::Framed;
 
 use crate::{
@@ -27,7 +30,7 @@ pub struct Env {
     pub replicas: Vec<Framed<TcpStream, RespParser>>,
     pub ack: usize,
     pub file_path: Option<Box<Path>>,
-    pub subscription: HashMap<SocketAddr, HashSet<Arc<Bytes>>>,
+    pub subscription: HashMap<SocketAddr, HashMap<Arc<Bytes>, Vec<mpsc::Sender<Value>>>>,
 }
 
 impl Env {
@@ -38,6 +41,6 @@ impl Env {
 
 #[derive(Debug)]
 pub enum WaitFor {
-    List(Sender<Value>),
-    Stream(StreamID, Sender<Value>),
+    List(oneshot::Sender<Value>),
+    Stream(StreamID, oneshot::Sender<Value>),
 }
