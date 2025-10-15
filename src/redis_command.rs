@@ -488,6 +488,7 @@ impl RedisCommand {
                         for (cnt, replica) in env.replicas.iter_mut().enumerate() {
                             eprintln!("handling replica No.{cnt}");
                             replica.send(&command).await.expect("send error.");
+                            eprintln!("send completed");
                             if cnt < replicas_count as usize {
                                 if let Some(result) = replica.next().await {
                                     match result {
