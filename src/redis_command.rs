@@ -50,28 +50,7 @@ pub enum RedisCommand {
     Wait(u32, u64),
     Keys(Value),
     Config(Value, Value),
-}
-
-fn get(map: &Map, expiry: &Expiry, key: Bytes) -> Value {
-    let item = match (map.get(&key), expiry.get(&key)) {
-        (None, _) => &Value::NullBulkString,
-        (Some(val), None) => val,
-        (Some(val), Some(expire_time)) => {
-            let now = SystemTime::now();
-            eprintln!("now: {now:?}, expire_time: {expire_time:?}");
-            if *expire_time < now {
-                &Value::NullBulkString
-            } else {
-                val
-            }
-        }
-    };
-    eprintln!("get {item:?}");
-    match item {
-        val @ Value::BulkString(_) | val @ Value::NullBulkString => val.clone(),
-        Value::Integer(i) => Value::BulkString(i.to_string().into()),
-        val => todo!("{val:?}"),
-    }
+    Subscribe(Value),
 }
 
 impl RedisCommand {
@@ -582,6 +561,14 @@ impl RedisCommand {
                             .collect(),
                     )
                 }
+                RedisCommand::Subscribe(subscribe_to) => Value::Array(
+                    [
+                        Value::BulkString("subscribe".into()),
+                        subscribe_to,
+                        Value::Integer(1),
+                    ]
+                    .into(),
+                ),
             }
         })
     }
@@ -766,11 +753,37 @@ impl RedisCommand {
                         let target = arr.get(2).unwrap().clone();
                         RedisCommand::Config(operation, target)
                     }
+                    "SUBSCRIBE" => {
+                        let subscribe_to = arr.get(1).unwrap().clone();
+                        RedisCommand::Subscribe(subscribe_to)
+                    }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
             }
             ref cmd => panic!("Unknown command {cmd:?}"),
         }
+    }
+}
+
+fn get(map: &Map, expiry: &Expiry, key: Bytes) -> Value {
+    let item = match (map.get(&key), expiry.get(&key)) {
+        (None, _) => &Value::NullBulkString,
+        (Some(val), None) => val,
+        (Some(val), Some(expire_time)) => {
+            let now = SystemTime::now();
+            eprintln!("now: {now:?}, expire_time: {expire_time:?}");
+            if *expire_time < now {
+                &Value::NullBulkString
+            } else {
+                val
+            }
+        }
+    };
+    eprintln!("get {item:?}");
+    match item {
+        val @ Value::BulkString(_) | val @ Value::NullBulkString => val.clone(),
+        Value::Integer(i) => Value::BulkString(i.to_string().into()),
+        val => todo!("{val:?}"),
     }
 }
 
