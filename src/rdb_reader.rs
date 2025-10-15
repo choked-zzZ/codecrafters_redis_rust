@@ -68,15 +68,11 @@ pub async fn rbd_reader(path: &Path) -> Value {
             }
             _ => {}
         }
-        let len = fp.read_u8().await.unwrap();
-        let mut key = vec![0; len as usize];
-        fp.read_exact(&mut key).await.unwrap();
+        let key = get_content(&mut fp).await;
         match indicator {
             0x00 => {
-                let len = fp.read_u8().await.unwrap();
-                let mut val = vec![0; len as usize];
-                fp.read_exact(&mut val).await.unwrap();
-                data.push_back(Value::BulkString(val.into()));
+                let val = get_content(&mut fp).await;
+                data.push_back(val);
             }
             _ => unreachable!(),
         }
