@@ -30,6 +30,10 @@ pub async fn rbd_reader(path: &Path) -> Value {
         let mut buf = vec![0; length as usize];
         fp.read_exact(&mut buf).await.unwrap();
         metadata.push(buf);
+        let length = fp.read_u8().await.unwrap();
+        let mut buf = vec![0; length as usize];
+        fp.read_exact(&mut buf).await.unwrap();
+        metadata.push(buf);
     }
     let index = fp.read_u8().await.unwrap();
     assert_eq!(fp.read_u8().await.unwrap(), 0xFB);
