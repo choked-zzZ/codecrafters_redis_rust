@@ -1,11 +1,11 @@
 use crate::Value;
-use regex::Regex;
+use bytes::BytesMut;
 use std::collections::VecDeque;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncReadExt;
 
-use tokio::fs::OpenOptions;
+use tokio::fs::{File, OpenOptions};
 
 pub async fn rbd_reader(path: &Path) -> Value {
     let mut fp = OpenOptions::new()
@@ -23,16 +23,10 @@ pub async fn rbd_reader(path: &Path) -> Value {
     let mut metadata = Vec::new();
     loop {
         // TODO: Fix length encoding and string encoding.
-        let length = fp.read_u8().await.unwrap();
-        eprintln!("metadate key: {length}");
-        let mut buf = vec![0; length as usize];
-        fp.read_exact(&mut buf).await.unwrap();
-        metadata.push(buf);
-        let length = fp.read_u8().await.unwrap();
-        eprintln!("metadate val: {length}");
-        let mut buf = vec![0; length as usize];
-        fp.read_exact(&mut buf).await.unwrap();
-        metadata.push(buf);
+        let key = get_content(&mut fp).await;
+        metadata.push(key);
+        let val = get_content(&mut fp).await;
+        metadata.push(val);
         let indicator = fp.read_u8().await.unwrap();
         match indicator {
             0xFA => continue,
@@ -88,4 +82,33 @@ pub async fn rbd_reader(path: &Path) -> Value {
         }
     }
     Value::Array([].into())
+}
+
+async fn get_content(fp: &mut File) -> Value {
+    let byte = fp.read_u8().await.unwrap();
+    let length = match byte {
+        0b00 => byte as usize,
+        0b01 => {
+            let leading = ((byte ^ 0x40) << 8) as usize;
+            let trailing = fp.read_u8().await.unwrap() as usize;
+            leading ^ trailing
+        }
+        0b10 => fp.read_u64().await.unwrap() as usize,
+        0b11 => {
+            eprintln!("number literal");
+            let num = match byte {
+                0xC0 => fp.read_u8().await.unwrap() as u32,
+                0xC1 => fp.read_u16().await.unwrap() as u32,
+                0xC2 => fp.read_u32().await.unwrap(),
+                _ => todo!(),
+            };
+            return Value::BulkString(num.to_string().into());
+        }
+        _ => unreachable!(),
+    };
+    eprintln!("get length: {length}");
+    let mut content = BytesMut::zeroed(length);
+    fp.read_exact(&mut content).await.unwrap();
+    let content = content.freeze();
+    Value::BulkString(content)
 }
