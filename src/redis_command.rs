@@ -1,5 +1,5 @@
 use std::collections::hash_map::Entry;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -630,13 +630,11 @@ impl RedisCommand {
                 RedisCommand::Subscribe(subscribe_to) => {
                     let mut env = env.lock().await;
                     let subscribe_to = Arc::new(subscribe_to);
-                    let (tx, rx) = mpsc::channel(32);
+                    let (tx, rx) = mpsc::channel::<Value>(32);
                     env.subscription
                         .entry(addr)
-                        .or_insert(HashMap::new())
-                        .entry(subscribe_to.clone())
-                        .or_insert(Vec::new())
-                        .push(tx);
+                        .or_insert(HashSet::new())
+                        .insert(subscribe_to.clone());
                     Value::Array(
                         [
                             Value::BulkString("subscribe".into()),
@@ -648,9 +646,9 @@ impl RedisCommand {
                 }
                 RedisCommand::Publish(channel, message) => {
                     let env = env.lock().await;
-                    let senders = env.subscription.get(&addr).unwrap().get(&channel).unwrap();
-                    let publish = senders.len();
-                    for sender in senders {
+                    let channel = env.channels.get(&channel).unwrap();
+                    let publish = channel.len();
+                    for sender in channel {
                         sender.send(message.clone()).await.unwrap();
                     }
                     Value::Integer(publish as i64)

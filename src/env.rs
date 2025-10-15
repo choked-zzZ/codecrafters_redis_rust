@@ -30,7 +30,8 @@ pub struct Env {
     pub replicas: Vec<Framed<TcpStream, RespParser>>,
     pub ack: usize,
     pub file_path: Option<Box<Path>>,
-    pub subscription: HashMap<SocketAddr, HashMap<Arc<Bytes>, Vec<mpsc::Sender<Value>>>>,
+    pub channels: HashMap<Arc<Bytes>, Vec<mpsc::Sender<Value>>>,
+    pub subscription: HashMap<SocketAddr, HashSet<Arc<Bytes>>>,
 }
 
 impl Env {
