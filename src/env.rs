@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     net::SocketAddr,
     path::Path,
     sync::Arc,
@@ -27,6 +27,7 @@ pub struct Env {
     pub replicas: Vec<Framed<TcpStream, RespParser>>,
     pub ack: usize,
     pub file_path: Option<Box<Path>>,
+    pub subscription: HashSet<Arc<Bytes>>,
 }
 
 #[derive(Debug)]

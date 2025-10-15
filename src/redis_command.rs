@@ -50,7 +50,7 @@ pub enum RedisCommand {
     Wait(u32, u64),
     Keys(Value),
     Config(Value, Value),
-    Subscribe(Value),
+    Subscribe(Bytes),
 }
 
 impl RedisCommand {
@@ -563,14 +563,19 @@ impl RedisCommand {
                             .collect(),
                     )
                 }
-                RedisCommand::Subscribe(subscribe_to) => Value::Array(
-                    [
-                        Value::BulkString("subscribe".into()),
-                        subscribe_to,
-                        Value::Integer(1),
-                    ]
-                    .into(),
-                ),
+                RedisCommand::Subscribe(subscribe_to) => {
+                    let mut env = env.lock().await;
+                    let subscribe_to = Arc::new(subscribe_to);
+                    env.subscription.insert(subscribe_to.clone());
+                    Value::Array(
+                        [
+                            Value::BulkString("subscribe".into()),
+                            Value::BulkString(subscribe_to.as_ref().clone()),
+                            Value::Integer(env.subscription.len() as _),
+                        ]
+                        .into(),
+                    )
+                }
             }
         })
     }
@@ -756,7 +761,7 @@ impl RedisCommand {
                         RedisCommand::Config(operation, target)
                     }
                     "SUBSCRIBE" => {
-                        let subscribe_to = arr.get(1).unwrap().clone();
+                        let subscribe_to = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         RedisCommand::Subscribe(subscribe_to)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
