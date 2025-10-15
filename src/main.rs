@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use clap::Parser;
 use futures::lock::Mutex;
 use futures::SinkExt;
@@ -182,6 +183,10 @@ async fn main() {
         .zip(args.dbfilename.as_ref())
         .map(|(dir, filename)| Path::new(dir).join(filename).into_boxed_path());
 
+    if matches!(env.file_path.as_ref().map(|x| x.exists()), Some(false)) {
+        eprintln!("file not exist");
+        tokio::fs::write(env.file_path.as_ref().unwrap(), STANDARD.decode("UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==").unwrap()).await.unwrap();
+    }
     if env.file_path.is_some() {
         let (map, expiry) = rdb_reader::rbd_reader(env.file_path.as_ref().unwrap().as_ref()).await;
         env.map = map;
