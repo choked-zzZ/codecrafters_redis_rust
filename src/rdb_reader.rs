@@ -73,10 +73,10 @@ pub async fn rbd_reader(path: &Path) -> Value {
             _ => {}
         }
         let key = get_content(&mut fp).await;
+        data.push_back(key);
         match indicator {
             0x00 => {
                 let val = get_content(&mut fp).await;
-                data.push_back(val);
             }
             _ => unreachable!(),
         }
