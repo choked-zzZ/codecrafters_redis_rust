@@ -27,10 +27,12 @@ pub async fn rbd_reader(path: &Path) -> Value {
         if length == 0xFE {
             break;
         }
+        eprintln!("metadate key: {length}");
         let mut buf = vec![0; length as usize];
         fp.read_exact(&mut buf).await.unwrap();
         metadata.push(buf);
         let length = fp.read_u8().await.unwrap();
+        eprintln!("metadate val: {length}");
         let mut buf = vec![0; length as usize];
         fp.read_exact(&mut buf).await.unwrap();
         metadata.push(buf);
