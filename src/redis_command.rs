@@ -567,8 +567,8 @@ impl RedisCommand {
                     let mut env = env.lock().await;
                     let subscribe_to = Arc::new(subscribe_to);
                     env.subscription
-                        .get_mut(&addr)
-                        .unwrap_or(&mut HashSet::new())
+                        .entry(addr)
+                        .or_insert(HashSet::new())
                         .insert(subscribe_to.clone());
                     Value::Array(
                         [
