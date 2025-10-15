@@ -100,7 +100,7 @@ async fn get_content(fp: &mut File) -> Value {
             };
             return Value::BulkString(num.to_string().into());
         }
-        _ => unreachable!(),
+        left => unreachable!("you met {left:x} but you shouldn't..."),
     };
     eprintln!("get length: {length}");
     let mut content = BytesMut::zeroed(length);
