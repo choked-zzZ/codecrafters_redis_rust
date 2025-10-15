@@ -82,7 +82,7 @@ pub async fn rbd_reader(path: &Path) -> Value {
 
 async fn get_content(fp: &mut File) -> Value {
     let byte = fp.read_u8().await.unwrap();
-    let length = match byte {
+    let length = match byte >> 6 {
         0b00 => byte as usize,
         0b01 => {
             let leading = ((byte ^ 0x40) << 8) as usize;
