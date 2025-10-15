@@ -34,10 +34,14 @@ pub async fn rbd_reader(path: &Path) -> Value {
             _ => unreachable!(),
         }
     }
+    eprintln!("enter database section");
     let index = fp.read_u8().await.unwrap();
+    eprintln!("database index: {index}");
     assert_eq!(fp.read_u8().await.unwrap(), 0xFB);
     let kvp_count = fp.read_u8().await.unwrap();
+    eprintln!("this section contain {kvp_count} key-value pair(s)");
     let expiry_count = fp.read_u8().await.unwrap();
+    eprintln!("{expiry_count} of them can be expired");
     let mut data = VecDeque::new();
     loop {
         let mut indicator = fp.read_u8().await.unwrap();
