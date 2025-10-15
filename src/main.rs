@@ -182,6 +182,12 @@ async fn main() {
         .zip(args.dbfilename.as_ref())
         .map(|(dir, filename)| Path::new(dir).join(filename).into_boxed_path());
 
+    if env.file_path.is_some() {
+        let (map, expiry) = rdb_reader::rbd_reader(env.file_path.as_ref().unwrap().as_ref()).await;
+        env.map = map;
+        env.expiry = expiry;
+    }
+
     let env = Arc::new(Mutex::new(env));
 
     // Replica

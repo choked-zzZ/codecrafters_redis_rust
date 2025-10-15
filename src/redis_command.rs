@@ -120,13 +120,7 @@ impl RedisCommand {
                 }
                 RedisCommand::Get(key) => {
                     let env = env.lock().await;
-                    if env.file_path.is_none() {
-                        get(&env.map, &env.expiry, key)
-                    } else {
-                        let (map, expiry) =
-                            rdb_reader::rbd_reader(env.file_path.as_ref().unwrap()).await;
-                        get(&map, &expiry, key)
-                    }
+                    get(&env.map, &env.expiry, key)
                 }
                 RedisCommand::RPush(list_key, mut items) => {
                     let mut env = env.lock().await;
