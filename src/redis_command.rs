@@ -4,7 +4,6 @@ use std::fs;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::ops::Bound::{Excluded, Unbounded};
-use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -14,12 +13,10 @@ use bytes::Bytes;
 use futures::lock::Mutex;
 use futures::{SinkExt, StreamExt};
 use itertools::Itertools;
-use regex::Regex;
-use tokio::io::AsyncReadExt;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 
-use crate::env::WaitFor;
+use crate::env::{Expiry, Map, WaitFor};
 use crate::resp_decoder::{Stream, StreamID};
 use crate::{rdb_reader, REPL_ID};
 use crate::{resp_decoder::Value, Env};
@@ -53,6 +50,28 @@ pub enum RedisCommand {
     Wait(u32, u64),
     Keys(Value),
     Config(Value, Value),
+}
+
+fn get(map: &Map, expiry: &Expiry, key: Bytes) -> Value {
+    let item = match (map.get(&key), expiry.get(&key)) {
+        (None, _) => &Value::NullBulkString,
+        (Some(val), None) => val,
+        (Some(val), Some(expire_time)) => {
+            let now = SystemTime::now();
+            eprintln!("now: {now:?}, expire_time: {expire_time:?}");
+            if *expire_time < now {
+                &Value::NullBulkString
+            } else {
+                val
+            }
+        }
+    };
+    eprintln!("get {item:?}");
+    match item {
+        val @ Value::BulkString(_) | val @ Value::NullBulkString => val.clone(),
+        Value::Integer(i) => Value::BulkString(i.to_string().into()),
+        val => todo!("{val:?}"),
+    }
 }
 
 impl RedisCommand {
@@ -99,26 +118,14 @@ impl RedisCommand {
 
                     Value::String("OK".into())
                 }
-                RedisCommand::Get(k) => {
+                RedisCommand::Get(key) => {
                     let env = env.lock().await;
-                    let item = match (env.map.get(&k), env.expiry.get(&k)) {
-                        (None, _) => &Value::NullBulkString,
-                        (Some(val), None) => val,
-                        (Some(val), Some(expire_time)) => {
-                            let now = SystemTime::now();
-                            eprintln!("now: {now:?}, expire_time: {expire_time:?}");
-                            if *expire_time < now {
-                                &Value::NullBulkString
-                            } else {
-                                val
-                            }
-                        }
-                    };
-                    eprintln!("get {item:?}");
-                    match item {
-                        val @ Value::BulkString(_) | val @ Value::NullBulkString => val.clone(),
-                        Value::Integer(i) => Value::BulkString(i.to_string().into()),
-                        val => todo!("{val:?}"),
+                    if env.file_path.is_none() {
+                        get(&env.map, &env.expiry, key)
+                    } else {
+                        let (map, expiry) =
+                            rdb_reader::rbd_reader(env.file_path.as_ref().unwrap()).await;
+                        get(&map, &expiry, key)
                     }
                 }
                 RedisCommand::RPush(list_key, mut items) => {
@@ -562,19 +569,23 @@ impl RedisCommand {
                 }
                 RedisCommand::Keys(pattern) => {
                     let pattern = str::from_utf8(pattern.as_bulk_string().unwrap()).unwrap();
-                    let re = Regex::new(".").unwrap();
+                    let re = glob::Pattern::new(pattern).unwrap();
 
-                    let mut dir = args.dir.clone().unwrap();
-                    dir.push('/');
-                    dir.push_str(args.dbfilename.as_ref().unwrap());
-                    let path = Path::new(&dir);
-                    eprintln!("file path: {:?}", path);
+                    let path = env.lock().await.file_path.clone().unwrap();
+
                     if !path.exists() {
                         eprintln!("file not exist");
-                        tokio::fs::write(path, STANDARD.decode("UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==").unwrap()).await.unwrap();
+                        tokio::fs::write(path.as_ref(), STANDARD.decode("UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==").unwrap()).await.unwrap();
                     }
-                    eprintln!("{:x?}", fs::read(path));
-                    rdb_reader::rbd_reader(path).await
+                    eprintln!("{:x?}", fs::read(path.as_ref()));
+                    let key_val_pair = rdb_reader::rbd_reader(path.as_ref()).await.0;
+                    Value::Array(
+                        key_val_pair
+                            .into_keys()
+                            .filter(|x| re.matches(str::from_utf8(x).unwrap()))
+                            .map(|x| Value::BulkString(x.as_ref().clone()))
+                            .collect(),
+                    )
                 }
             }
         })

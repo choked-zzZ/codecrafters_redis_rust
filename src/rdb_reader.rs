@@ -1,13 +1,14 @@
+use crate::env::{Expiry, Map};
 use crate::Value;
-use bytes::BytesMut;
-use std::collections::VecDeque;
+use bytes::{Bytes, BytesMut};
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::Arc;
+use std::time::{Duration, UNIX_EPOCH};
 use tokio::io::AsyncReadExt;
 
 use tokio::fs::{File, OpenOptions};
 
-pub async fn rbd_reader(path: &Path) -> Value {
+pub async fn rbd_reader(path: &Path) -> (Map, Expiry) {
     let mut fp = OpenOptions::new()
         .read(true)
         .open(path)
@@ -42,49 +43,44 @@ pub async fn rbd_reader(path: &Path) -> Value {
     eprintln!("this section contain {kvp_count} key-value pair(s)");
     let expiry_count = fp.read_u8().await.unwrap();
     eprintln!("{expiry_count} of them can be expired");
-    let mut data = VecDeque::new();
+    let mut map = Map::new();
+    let mut expiry = Expiry::new();
     loop {
         let mut indicator = fp.read_u8().await.unwrap();
-        let mut skip = false;
+        let mut _skip = false;
+        let mut expire_time = None;
         match indicator {
             0xFF => break,
             0xFC => {
                 let expire_milisecs = fp.read_u64_le().await.unwrap();
-                let milisecs_to_now = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis();
-                if expire_milisecs as u128 >= milisecs_to_now {
-                    skip = true;
-                }
+                expire_time = Some(UNIX_EPOCH + Duration::from_millis(expire_milisecs));
                 indicator = fp.read_u8().await.unwrap();
             }
             0xFD => {
                 let expire_secs = fp.read_u32_le().await.unwrap();
-                let secs_to_now = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs();
-                if expire_secs as u64 >= secs_to_now {
-                    skip = true;
-                }
+                expire_time = Some(UNIX_EPOCH + Duration::from_secs(expire_secs as u64));
                 indicator = fp.read_u8().await.unwrap();
             }
             _ => {}
         }
-        let key = get_content(&mut fp).await;
-        data.push_back(key);
+        let key = Arc::new(get_content(&mut fp).await);
+        if let Some(expire_time) = expire_time {
+            expiry.insert(key.clone(), expire_time);
+        }
         match indicator {
             0x00 => {
-                let val = get_content(&mut fp).await;
+                let val = Value::BulkString(get_content(&mut fp).await);
+                map.insert(key.clone(), val);
             }
             _ => unreachable!(),
         }
     }
-    Value::Array(data)
+    assert_eq!(fp.read_u8().await.unwrap(), 0xFF);
+    let _crc64_checksum = fp.read_u64().await.unwrap();
+    (map, expiry)
 }
 
-async fn get_content(fp: &mut File) -> Value {
+async fn get_content(fp: &mut File) -> Bytes {
     let byte = fp.read_u8().await.unwrap();
     let length = match byte >> 6 {
         0b00 => byte as usize,
@@ -103,7 +99,7 @@ async fn get_content(fp: &mut File) -> Value {
                 _ => todo!(),
             };
             eprintln!("{num}");
-            return Value::BulkString(num.to_string().into());
+            return num.to_string().into();
         }
         left => unreachable!("you met {left:x} but you shouldn't..."),
     };
@@ -113,5 +109,5 @@ async fn get_content(fp: &mut File) -> Value {
     let content = content.freeze();
     let content_string = str::from_utf8(&content).unwrap();
     eprintln!("{content_string}");
-    Value::BulkString(content)
+    content
 }

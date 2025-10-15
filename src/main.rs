@@ -3,6 +3,7 @@ use futures::lock::Mutex;
 use futures::SinkExt;
 use futures::StreamExt;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
@@ -166,8 +167,16 @@ async fn main() {
     let listener = TcpListener::bind(format!("127.0.0.1:{}", args.port))
         .await
         .unwrap();
-    let env = Arc::new(Mutex::new(Env::default()));
+    let mut env = Env::default();
     let args_1 = args.clone();
+
+    env.file_path = args
+        .dir
+        .as_ref()
+        .zip(args.dbfilename.as_ref())
+        .map(|(dir, filename)| Path::new(dir).join(filename).into_boxed_path());
+
+    let env = Arc::new(Mutex::new(env));
 
     // Replica
     if let Some(addr) = &args.replicaof {
