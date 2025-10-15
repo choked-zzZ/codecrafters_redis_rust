@@ -511,6 +511,7 @@ impl RedisCommand {
                         );
                         let ack_master_current = env.ack;
                         eprintln!("the ack need to match the number {ack_master_current}");
+                        eprintln!("we got {} replica(s)", env.replicas.len());
                         for (cnt, replica) in env.replicas.iter_mut().enumerate() {
                             replica.send(&command).await.expect("send error.");
                             if cnt < replicas_count as usize {
