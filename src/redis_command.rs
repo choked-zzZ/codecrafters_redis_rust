@@ -635,6 +635,10 @@ impl RedisCommand {
                         .entry(addr)
                         .or_insert(HashSet::new())
                         .insert(subscribe_to.clone());
+                    env.channels
+                        .entry(subscribe_to.clone())
+                        .or_insert(Vec::new())
+                        .push(tx);
                     Value::Array(
                         [
                             Value::BulkString("subscribe".into()),
