@@ -273,7 +273,7 @@ impl Value {
         match self {
             Value::String(s) => 3 + s.len(),
             Value::Error(msg) => 3 + msg.len(),
-            Value::Integer(int) => todo!(),
+            Value::Integer(_int) => todo!(),
             Value::BulkString(s) => 6 + s.len(),
             Value::Array(arr) => 3 + 1 + arr.iter().map(|x| x.buf_size()).sum::<usize>(),
             Value::NullArray => 4,
