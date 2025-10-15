@@ -588,6 +588,7 @@ impl RedisCommand {
                     assert_eq!(fp.read_u8().await.unwrap(), 0xFA);
                     let mut metadata = Vec::new();
                     loop {
+                        // TODO: Fix length encoding and string encoding.
                         let length = fp.read_u8().await.unwrap();
                         if length == 0xFE {
                             break;
