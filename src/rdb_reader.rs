@@ -7,7 +7,7 @@ use tokio::io::AsyncReadExt;
 
 use tokio::fs::OpenOptions;
 
-pub async fn rbd_reader(path: &Path) {
+pub async fn rbd_reader(path: &Path) -> Value {
     let mut fp = OpenOptions::new()
         .read(true)
         .open(path)
@@ -67,18 +67,16 @@ pub async fn rbd_reader(path: &Path) {
         }
         let len = fp.read_u8().await.unwrap();
         let mut key = vec![0; len as usize];
-        let matched = re.is_match(str::from_utf8(&key).expect("not a valid utf-8 encoded string"));
         fp.read_exact(&mut key).await.unwrap();
         match indicator {
             0x00 => {
                 let len = fp.read_u8().await.unwrap();
                 let mut val = vec![0; len as usize];
                 fp.read_exact(&mut val).await.unwrap();
-                if matched {
-                    data.push_back(Value::BulkString(val.into()));
-                }
+                data.push_back(Value::BulkString(val.into()));
             }
             _ => unreachable!(),
         }
     }
+    Value::Array([].into())
 }
