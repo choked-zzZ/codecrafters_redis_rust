@@ -81,7 +81,7 @@ pub async fn rbd_reader(path: &Path) -> Value {
             _ => unreachable!(),
         }
     }
-    Value::Array([].into())
+    Value::Array(data)
 }
 
 async fn get_content(fp: &mut File) -> Value {
