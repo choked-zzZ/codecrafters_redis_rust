@@ -32,7 +32,7 @@ pub async fn rbd_reader(path: &Path) -> (Map, Expiry) {
         match indicator {
             0xFA => continue,
             0xFE => break,
-            _ => unreachable!(),
+            indi => unreachable!("you met {indi} but you shouldn't"),
         }
     }
     eprintln!("enter database section");
