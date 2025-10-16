@@ -38,6 +38,12 @@ pub struct Env {
 
 impl Env {
     pub fn is_in_sub_mode(&self, addr: &SocketAddr) -> bool {
+        eprintln!(
+            "{:?} {:?} {:?}",
+            self.subscription,
+            addr,
+            self.subscription.get(addr)
+        );
         self.subscription.get(addr).is_some_and(|x| !x.is_empty())
     }
 }
