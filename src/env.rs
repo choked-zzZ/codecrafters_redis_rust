@@ -57,31 +57,27 @@ pub enum WaitFor {
     Stream(StreamID, oneshot::Sender<Value>),
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub struct Score(pub f64);
+type SSMap = HashMap<Arc<Bytes>, f64>;
+type SSList = skiplist::OrderedSkipList<(f64, Arc<Bytes>)>;
 
-#[allow(clippy::non_canonical_partial_ord_impl)]
-impl PartialOrd for Score {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.0.partial_cmp(&other.0)
-    }
-}
-
-impl Eq for Score {}
-
-impl Ord for Score {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
-    }
-}
-
-type SSMap = HashMap<Arc<Bytes>, Score>;
-type SSList = BTreeSet<(Score, Arc<Bytes>)>;
-
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct SortedSet {
     map: SSMap,
     list: SSList,
+}
+
+impl Default for SortedSet {
+    fn default() -> Self {
+        Self {
+            map: SSMap::default(),
+            list: unsafe {
+                SSList::with_comp(|x, y| match x.0.partial_cmp(&y.0).unwrap() {
+                    std::cmp::Ordering::Equal => x.1.cmp(&y.1),
+                    res => res,
+                })
+            },
+        }
+    }
 }
 
 impl SortedSet {
@@ -93,8 +89,12 @@ impl SortedSet {
         if val.is_nan() {
             panic!()
         }
-        let val = Score(val);
         self.list.insert((val, key.clone()));
-        self.map.insert(key.clone(), val).map(|x| x.0)
+        self.map.insert(key.clone(), val)
+    }
+
+    pub fn rank(&self, key: &Arc<Bytes>) -> Option<usize> {
+        let (k, &v) = self.map.get_key_value(key)?;
+        self.list.index_of(&(v, k.clone()))
     }
 }

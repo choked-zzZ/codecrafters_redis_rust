@@ -54,6 +54,7 @@ pub enum RedisCommand {
     Publish(Bytes, Value),
     Unsubscribe(Bytes),
     ZAdd(Bytes, f64, Bytes),
+    ZRank(Bytes, Bytes),
 }
 
 impl RedisCommand {
@@ -89,6 +90,7 @@ impl RedisCommand {
             Self::Publish(_, _) => "PUBLISH",
             Self::Unsubscribe(_) => "UNSUBSCRIBE",
             Self::ZAdd(_, _, _) => "ZADD",
+            Self::ZRank(_, _) => "ZRANK",
         }
         .into()
     }
@@ -704,6 +706,18 @@ impl RedisCommand {
                         }
                     }
                 }
+                RedisCommand::ZRank(name, key) => {
+                    // let name = Arc::new(name);
+                    let key = Arc::new(key);
+                    let env = env.lock().await;
+                    let Some(sorted_set) = env.sorted_sets.get(&name) else {
+                        return Value::NullBulkString;
+                    };
+                    match sorted_set.rank(&key) {
+                        None => Value::NullBulkString,
+                        Some(rank) => Value::Integer(rank as i64),
+                    }
+                }
                 _ => unreachable!(),
             }
         })
@@ -907,6 +921,11 @@ impl RedisCommand {
                         let val = arr.get(2).unwrap().as_float().unwrap();
                         let key = arr.get(3).unwrap().as_bulk_string().unwrap().clone();
                         RedisCommand::ZAdd(sorted_set_name, val, key)
+                    }
+                    "ZRANK" => {
+                        let sorted_set_name = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        let key = arr.get(2).unwrap().as_bulk_string().unwrap().clone();
+                        RedisCommand::ZRank(sorted_set_name, key)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
