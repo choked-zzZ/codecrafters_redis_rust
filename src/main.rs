@@ -1,5 +1,6 @@
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use clap::Parser;
+use futures::stream::SplitSink;
 use futures::SinkExt;
 use futures::StreamExt;
 use std::net::SocketAddr;

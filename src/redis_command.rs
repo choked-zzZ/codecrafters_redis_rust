@@ -10,6 +10,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use bytes::Bytes;
+use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
 use itertools::Itertools;
 use tokio::net::TcpStream;
@@ -670,6 +671,7 @@ impl RedisCommand {
                         .or_insert(Vec::new())
                         .push(tx);
                     let channel_name = subscribe_to.clone();
+                    let framed_move = framed.clone();
                     let a = tokio::spawn(async move {
                         while let Some(val) = rx.recv().await {
                             let response = Value::Array(
@@ -680,7 +682,7 @@ impl RedisCommand {
                                 ]
                                 .into(),
                             );
-                            // framed.lock().await.send(&response).await.unwrap();
+                            framed_move.lock().await.send(&response).await.unwrap();
                         }
                     });
                     Value::Array(
