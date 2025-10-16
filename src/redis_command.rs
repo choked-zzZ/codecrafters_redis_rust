@@ -124,7 +124,7 @@ impl RedisCommand {
         self,
         env: Arc<Mutex<Env>>,
         _addr: SocketAddr,
-        _argss: Arc<Args>,
+        _args: Arc<Args>,
     ) -> Value {
         if !self.allow_when_subscribe() {
             return Value::Error(format!("ERR Can't execute '{}': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context", self.show()).into());
@@ -670,7 +670,7 @@ impl RedisCommand {
                         .or_insert(Vec::new())
                         .push(tx);
                     let channel_name = subscribe_to.clone();
-                    tokio::spawn(async move {
+                    let a = tokio::spawn(async move {
                         while let Some(val) = rx.recv().await {
                             let response = Value::Array(
                                 [
@@ -680,7 +680,7 @@ impl RedisCommand {
                                 ]
                                 .into(),
                             );
-                            framed.lock().await.send(&response).await.unwrap();
+                            // framed.lock().await.send(&response).await.unwrap();
                         }
                     });
                     Value::Array(
