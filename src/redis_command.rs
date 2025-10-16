@@ -676,9 +676,9 @@ impl RedisCommand {
                 }
                 RedisCommand::Publish(channel, message) => {
                     let env = env.lock().await;
+                    eprintln!("the channel will publish: {:?}", env.channels);
                     let channel = env.channels.get(&channel).unwrap();
                     let publish = channel.len();
-                    eprintln!("the channel will publish: {channel:?}");
                     for (sender, _handler) in channel.values() {
                         sender.send(message.clone()).await.expect("error.");
                     }
