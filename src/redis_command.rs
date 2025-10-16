@@ -16,7 +16,7 @@ use tokio::sync::Mutex;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
 
-use crate::env::{Expiry, Map, WaitFor};
+use crate::env::{Expiry, Map, SortedSet, WaitFor};
 use crate::resp_decoder::{Stream, StreamID};
 use crate::{rdb_reader, REPL_ID};
 use crate::{resp_decoder::Value, Env};
@@ -53,10 +53,7 @@ pub enum RedisCommand {
     Subscribe(Bytes),
     Publish(Bytes, Value),
     Unsubscribe(Bytes),
-    // PSubscribe,
-    // PUnsubscribe,
-    // Quit,
-    // Reset,
+    ZAdd(Bytes, f64, Bytes),
 }
 
 impl RedisCommand {
@@ -91,6 +88,7 @@ impl RedisCommand {
             Self::Subscribe(_) => "SUBSCRIBE",
             Self::Publish(_, _) => "PUBLISH",
             Self::Unsubscribe(_) => "UNSUBSCRIBE",
+            Self::ZAdd(_, _, _) => "ZADD",
         }
         .into()
     }
@@ -688,6 +686,20 @@ impl RedisCommand {
                     }
                     Value::Integer(publish as i64)
                 }
+                RedisCommand::ZAdd(name, val, key) => {
+                    let mut env = env.lock().await;
+                    let name = Arc::new(name);
+                    let key = Arc::new(key);
+                    match env.sorted_sets.entry(name) {
+                        Entry::Vacant(entry) => {
+                            let mut sorted_set = SortedSet::default();
+                            sorted_set.insert(key, val);
+                            entry.insert(sorted_set);
+                        }
+                        Entry::Occupied(mut entry) => todo!(),
+                    };
+                    Value::Integer(1)
+                }
                 _ => unreachable!(),
             }
         })
@@ -885,6 +897,12 @@ impl RedisCommand {
                     "UNSUBSCRIBE" => {
                         let object = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         RedisCommand::Unsubscribe(object)
+                    }
+                    "ZADD" => {
+                        let sorted_set_name = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        let val = arr.get(2).unwrap().as_float().unwrap();
+                        let key = arr.get(3).unwrap().as_bulk_string().unwrap().clone();
+                        RedisCommand::ZAdd(sorted_set_name, val, key)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
