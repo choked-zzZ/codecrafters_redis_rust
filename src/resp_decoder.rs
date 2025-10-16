@@ -447,9 +447,9 @@ impl Decoder for RespParser {
     }
 }
 
-impl Encoder<&Value> for RespParser {
+impl Encoder<Value> for RespParser {
     type Error = io::Error;
-    fn encode(&mut self, item: &Value, dst: &mut BytesMut) -> Result<(), Self::Error> {
+    fn encode(&mut self, item: Value, dst: &mut BytesMut) -> Result<(), Self::Error> {
         item.encode(dst);
         Ok(())
     }

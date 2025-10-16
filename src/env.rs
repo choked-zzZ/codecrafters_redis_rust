@@ -7,9 +7,10 @@ use std::{
 };
 
 use bytes::Bytes;
+use futures::stream::SplitStream;
 use tokio::{
     net::TcpStream,
-    sync::{mpsc, oneshot, Mutex},
+    sync::{mpsc, oneshot},
 };
 use tokio_util::codec::Framed;
 
@@ -20,6 +21,7 @@ use crate::{
 
 pub type Map = HashMap<Arc<Bytes>, Value>;
 pub type Expiry = HashMap<Arc<Bytes>, SystemTime>;
+pub type _Framed = Framed<TcpStream, RespParser>;
 
 #[derive(Debug, Default)]
 pub struct Env {
@@ -27,7 +29,7 @@ pub struct Env {
     pub expiry: Expiry,
     pub waitlist: HashMap<Arc<Bytes>, VecDeque<WaitFor>>,
     pub in_transaction: HashMap<SocketAddr, Vec<RedisCommand>>,
-    pub replicas: Vec<Arc<Mutex<Framed<TcpStream, RespParser>>>>,
+    pub replicas: Vec<(Arc<mpsc::Sender<Value>>, SplitStream<_Framed>)>,
     pub ack: usize,
     pub file_path: Option<Box<Path>>,
     pub channels: HashMap<Arc<Bytes>, Vec<mpsc::Sender<Value>>>,

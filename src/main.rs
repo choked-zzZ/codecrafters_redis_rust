@@ -1,12 +1,12 @@
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use clap::Parser;
-use futures::stream::SplitSink;
 use futures::SinkExt;
 use futures::StreamExt;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tokio_util::codec::Framed;
 
@@ -45,9 +45,21 @@ async fn connection_handler(
     args: Arc<Args>,
 ) {
     let framed = Framed::new(stream, RespParser);
-    let framed = Arc::new(Mutex::new(framed));
+    let (mut framed_send, mut framed_recv) = framed.split();
+    let (tx, mut rx) = mpsc::channel(16);
+    let tx = Arc::new(tx);
+    tokio::spawn(async move {
+        while let Some(response) = rx.recv().await {
+            eprintln!("{addr} will send back: {response:?}");
+            if let Err(e) = framed_send.send(response).await {
+                eprintln!("crash into an error: {e}");
+                eprintln!("ready to close the connection");
+                return;
+            }
+        }
+    });
 
-    while let Some(result) = framed.lock().await.next().await {
+    while let Some(result) = framed_recv.next().await {
         match result {
             Ok(value) => {
                 eprintln!("address {addr} get recieved: {value:?}");
@@ -55,14 +67,11 @@ async fn connection_handler(
                 let command = RedisCommand::parse_command(value.clone());
                 let response = command
                     .clone()
-                    .exec(env.clone(), addr, args.clone(), framed.clone())
+                    .exec(env.clone(), addr, args.clone(), tx.clone())
                     .await;
-                eprintln!("{addr} will send back: {response:?}");
-                if let Err(e) = framed.lock().await.send(&response).await {
-                    eprintln!("carsh into error: {e}");
-                    eprintln!("connection closed.");
-                    return;
-                }
+                tx.send(response)
+                    .await
+                    .expect("Error when send response to the output thread.");
                 let mut env = env.lock().await;
                 if matches!(command, RedisCommand::PSync(..)) {
                     env.ack -= 14 + 48 + 40;
@@ -70,11 +79,8 @@ async fn connection_handler(
                     break;
                 }
                 if command.can_modify() {
-                    for replica_framed in env.replicas.iter_mut() {
-                        replica_framed
-                            .lock()
-                            .await
-                            .send(&value)
+                    for (send, _recv) in env.replicas.iter_mut() {
+                        send.send(value.as_ref().clone())
                             .await
                             .expect("send error.");
                         eprintln!("send a command {command:?} to one replica");
@@ -98,7 +104,7 @@ async fn connection_handler(
         }
     }
 
-    env.lock().await.replicas.push(framed.clone());
+    env.lock().await.replicas.push((tx.clone(), framed_recv));
     eprintln!("{addr}: replica mode on.")
 }
 
@@ -110,10 +116,23 @@ async fn replica_handler(addr: String, args: &Arc<Args>, env: Arc<Mutex<Env>>) {
     let addr = SocketAddr::new(std::net::IpAddr::from(ip), port);
     eprintln!("127.0.0.1:{} goes in replica handler", args.port);
     if let Ok(stream) = TcpStream::connect(addr).await {
-        let mut framed = Framed::new(stream, RespParser);
+        let framed = Framed::new(stream, RespParser);
+        let (mut framed_send, mut framed_recv) = framed.split();
+        let (tx, mut rx) = mpsc::channel(16);
+        let tx = Arc::new(tx);
+        tokio::spawn(async move {
+            while let Some(response) = rx.recv().await {
+                eprintln!("{addr} will send back: {response:?}");
+                if let Err(e) = framed_send.send(response).await {
+                    eprintln!("crash into an error: {e}");
+                    eprintln!("ready to close the connection");
+                    return;
+                }
+            }
+        });
         let handshake_first = Value::Array([Value::BulkString("PING".into())].into());
-        framed.send(&handshake_first).await.unwrap();
-        framed.next().await;
+        tx.send(handshake_first).await.unwrap();
+        framed_recv.next().await;
         let replconf_1 = Value::Array(
             [
                 Value::BulkString("REPLCONF".into()),
@@ -122,8 +141,8 @@ async fn replica_handler(addr: String, args: &Arc<Args>, env: Arc<Mutex<Env>>) {
             ]
             .into(),
         );
-        framed.send(&replconf_1).await.unwrap();
-        framed.next().await;
+        tx.send(replconf_1).await.unwrap();
+        framed_recv.next().await;
         let replconf_2 = Value::Array(
             [
                 Value::BulkString("REPLCONF".into()),
@@ -132,8 +151,8 @@ async fn replica_handler(addr: String, args: &Arc<Args>, env: Arc<Mutex<Env>>) {
             ]
             .into(),
         );
-        framed.send(&replconf_2).await.unwrap();
-        framed.next().await;
+        tx.send(replconf_2).await.unwrap();
+        framed_recv.next().await;
         let psync = Value::Array(
             [
                 Value::BulkString("PSYNC".into()),
@@ -142,11 +161,10 @@ async fn replica_handler(addr: String, args: &Arc<Args>, env: Arc<Mutex<Env>>) {
             ]
             .into(),
         );
-        framed.send(&psync).await.unwrap();
-        framed.next().await;
-        framed.next().await;
-        let framed = Arc::new(Mutex::new(framed));
-        while let Some(result) = framed.lock().await.next().await {
+        tx.send(psync).await.unwrap();
+        framed_recv.next().await;
+        framed_recv.next().await;
+        while let Some(result) = framed_recv.next().await {
             match result {
                 Ok(value) => {
                     eprintln!("got {value:?}");
@@ -154,7 +172,7 @@ async fn replica_handler(addr: String, args: &Arc<Args>, env: Arc<Mutex<Env>>) {
                     let command = RedisCommand::parse_command(value.clone());
                     let response = command
                         .clone()
-                        .exec(env.clone(), addr, args.clone(), framed.clone())
+                        .exec(env.clone(), addr, args.clone(), tx.clone())
                         .await;
                     env.lock().await.ack += value.buf_size();
                     eprintln!(
@@ -165,7 +183,7 @@ async fn replica_handler(addr: String, args: &Arc<Args>, env: Arc<Mutex<Env>>) {
                     );
                     if matches!(command, RedisCommand::Replconf(..)) {
                         eprintln!("{addr} will send back: {response:?}");
-                        if let Err(e) = framed.lock().await.send(&response).await {
+                        if let Err(e) = tx.send(response).await {
                             eprintln!("carsh into error: {e}");
                             eprintln!("connection closed.");
                             return;

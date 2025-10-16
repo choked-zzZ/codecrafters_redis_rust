@@ -10,17 +10,15 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use bytes::Bytes;
-use futures::stream::SplitSink;
-use futures::{SinkExt, StreamExt};
+use futures::StreamExt;
 use itertools::Itertools;
-use tokio::net::TcpStream;
+use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
-use tokio_util::codec::Framed;
 
 use crate::env::{Expiry, Map, WaitFor};
-use crate::resp_decoder::{RespParser, Stream, StreamID};
+use crate::resp_decoder::{Stream, StreamID};
 use crate::{rdb_reader, REPL_ID};
 use crate::{resp_decoder::Value, Env};
 use crate::{Args, REPL_OFFSET};
@@ -124,8 +122,9 @@ impl RedisCommand {
     async fn sub_mode_exec(
         self,
         env: Arc<Mutex<Env>>,
-        _addr: SocketAddr,
+        addr: SocketAddr,
         _args: Arc<Args>,
+        sender: Arc<mpsc::Sender<Value>>,
     ) -> Value {
         if !self.allow_when_subscribe() {
             return Value::Error(format!("ERR Can't execute '{}': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context", self.show()).into());
@@ -147,6 +146,9 @@ impl RedisCommand {
                 }
                 Value::Integer(publish as i64)
             }
+            RedisCommand::Subscribe(subscribe_to) => {
+                subscribe(env, addr, subscribe_to, sender).await
+            }
             _ => unreachable!(),
         }
     }
@@ -156,8 +158,7 @@ impl RedisCommand {
         env: Arc<Mutex<Env>>,
         addr: SocketAddr,
         args: Arc<Args>,
-        framed: Arc<Mutex<Framed<TcpStream, RespParser>>>,
-        // framed: Arc<Mutex<Framed<TcpStream, RespParser>>>,
+        sender: Arc<mpsc::Sender<Value>>,
     ) -> Pin<Box<dyn Future<Output = Value> + Send>> {
         Box::pin(async move {
             if !matches!(self, RedisCommand::Exec | RedisCommand::Discard) {
@@ -168,7 +169,7 @@ impl RedisCommand {
             }
             let in_sub_mode = env.lock().await.is_in_sub_mode(&addr);
             if in_sub_mode {
-                return self.sub_mode_exec(env, addr, args).await;
+                return self.sub_mode_exec(env, addr, args, sender).await;
             }
             match self {
                 RedisCommand::Ping => Value::String("PONG".into()),
@@ -488,7 +489,7 @@ impl RedisCommand {
                             for command in transaction {
                                 arr.push_back(
                                     command
-                                        .exec(env.clone(), addr, args.clone(), framed.clone())
+                                        .exec(env.clone(), addr, args.clone(), sender.clone())
                                         .await,
                                 );
                             }
@@ -575,17 +576,12 @@ impl RedisCommand {
                         let ack_master_current = env.ack;
                         eprintln!("the ack need to match the number {ack_master_current}");
                         eprintln!("we got {} replica(s)", env.replicas.len());
-                        for (cnt, replica) in env.replicas.iter_mut().enumerate() {
+                        for (cnt, (send, recv)) in env.replicas.iter_mut().enumerate() {
                             eprintln!("handling replica No.{cnt}");
-                            replica
-                                .lock()
-                                .await
-                                .send(&command)
-                                .await
-                                .expect("send error.");
+                            send.send(command.clone()).await.expect("send error.");
                             eprintln!("send completed");
                             if cnt < replicas_count as usize {
-                                if let Some(result) = replica.lock().await.next().await {
+                                if let Some(result) = recv.next().await {
                                     match result {
                                         Err(e) => eprintln!("got error: {e:?}"),
                                         Ok(val) => {
@@ -660,41 +656,7 @@ impl RedisCommand {
                     )
                 }
                 RedisCommand::Subscribe(subscribe_to) => {
-                    let mut env = env.lock().await;
-                    let subscribe_to = Arc::new(subscribe_to);
-                    let (tx, mut rx) = mpsc::channel::<Value>(32);
-                    env.subscription
-                        .entry(addr)
-                        .or_insert(HashSet::new())
-                        .insert(subscribe_to.clone());
-                    env.channels
-                        .entry(subscribe_to.clone())
-                        .or_insert(Vec::new())
-                        .push(tx);
-                    let channel_name = subscribe_to.clone();
-                    let framed_move = framed.clone();
-                    tokio::spawn(async move {
-                        while let Some(val) = rx.recv().await {
-                            let response = Value::Array(
-                                [
-                                    Value::BulkString("message".into()),
-                                    Value::BulkString(channel_name.as_ref().clone()),
-                                    val,
-                                ]
-                                .into(),
-                            );
-                            let mut tx = framed_move.lock().await;
-                            tx.send(&response).await.unwrap();
-                        }
-                    });
-                    Value::Array(
-                        [
-                            Value::BulkString("subscribe".into()),
-                            Value::BulkString(subscribe_to.as_ref().clone()),
-                            Value::Integer(env.subscription.get(&addr).unwrap().len() as _),
-                        ]
-                        .into(),
-                    )
+                    subscribe(env, addr, subscribe_to, sender.clone()).await
                 }
                 _ => unreachable!(),
             }
@@ -896,6 +858,47 @@ impl RedisCommand {
             ref cmd => panic!("Unknown command {cmd:?}"),
         }
     }
+}
+
+async fn subscribe(
+    env: Arc<Mutex<Env>>,
+    addr: SocketAddr,
+    subscribe_to: Bytes,
+    sender: Arc<mpsc::Sender<Value>>,
+) -> Value {
+    let mut env = env.lock().await;
+    let subscribe_to = Arc::new(subscribe_to);
+    let (tx, mut rx) = mpsc::channel::<Value>(32);
+    env.subscription
+        .entry(addr)
+        .or_insert(HashSet::new())
+        .insert(subscribe_to.clone());
+    env.channels
+        .entry(subscribe_to.clone())
+        .or_insert(Vec::new())
+        .push(tx);
+    let channel_name = subscribe_to.clone();
+    tokio::spawn(async move {
+        while let Some(val) = rx.recv().await {
+            let response = Value::Array(
+                [
+                    Value::BulkString("message".into()),
+                    Value::BulkString(channel_name.as_ref().clone()),
+                    val,
+                ]
+                .into(),
+            );
+            sender.send(response).await.unwrap();
+        }
+    });
+    Value::Array(
+        [
+            Value::BulkString("subscribe".into()),
+            Value::BulkString(subscribe_to.as_ref().clone()),
+            Value::Integer(env.subscription.get(&addr).unwrap().len() as _),
+        ]
+        .into(),
+    )
 }
 
 fn get(map: &Map, expiry: &Expiry, key: Bytes) -> Value {
