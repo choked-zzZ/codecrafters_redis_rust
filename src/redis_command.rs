@@ -112,10 +112,7 @@ impl RedisCommand {
     }
 
     fn allow_when_subscribe(&self) -> bool {
-        matches!(
-            self,
-            RedisCommand::Subscribe(..) | RedisCommand::Ping | RedisCommand::Publish(..)
-        )
+        matches!(self, RedisCommand::Subscribe(..) | RedisCommand::Ping)
     }
 
     async fn sub_mode_exec(
@@ -136,15 +133,6 @@ impl RedisCommand {
                 ]
                 .into(),
             ),
-            RedisCommand::Publish(channel, message) => {
-                let env = env.lock().await;
-                let channel = env.channels.get(&channel).unwrap();
-                let publish = channel.len();
-                for sender in channel {
-                    sender.send(message.clone()).await.unwrap();
-                }
-                Value::Integer(publish as i64)
-            }
             RedisCommand::Subscribe(subscribe_to) => {
                 subscribe(env, addr, subscribe_to, sender).await
             }
@@ -658,7 +646,15 @@ impl RedisCommand {
                 RedisCommand::Subscribe(subscribe_to) => {
                     subscribe(env, addr, subscribe_to, sender.clone()).await
                 }
-                _ => unreachable!(),
+                RedisCommand::Publish(channel, message) => {
+                    let env = env.lock().await;
+                    let channel = env.channels.get(&channel).unwrap();
+                    let publish = channel.len();
+                    for sender in channel {
+                        sender.send(message.clone()).await.unwrap();
+                    }
+                    Value::Integer(publish as i64)
+                } // _ => unreachable!(),
             }
         })
     }
