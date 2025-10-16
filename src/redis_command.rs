@@ -693,12 +693,12 @@ impl RedisCommand {
                     match env.sorted_sets.entry(name) {
                         Entry::Vacant(entry) => {
                             let mut sorted_set = SortedSet::default();
-                            sorted_set.insert(key, val);
+                            let r = sorted_set.insert(key, val);
                             entry.insert(sorted_set);
+                            Value::Integer(if r.is_some() { 0 } else { 1 })
                         }
                         Entry::Occupied(mut entry) => todo!(),
-                    };
-                    Value::Integer(1)
+                    }
                 }
                 _ => unreachable!(),
             }

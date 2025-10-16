@@ -89,12 +89,12 @@ impl SortedSet {
         (&self.map, &self.list)
     }
 
-    pub fn insert(&mut self, key: Arc<Bytes>, val: f64) {
+    pub fn insert(&mut self, key: Arc<Bytes>, val: f64) -> Option<f64> {
         if val.is_nan() {
             panic!()
         }
         let val = Score(val);
-        self.map.insert(key.clone(), val);
         self.list.insert((val, key.clone()));
+        self.map.insert(key.clone(), val).map(|x| x.0)
     }
 }

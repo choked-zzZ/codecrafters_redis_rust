@@ -274,8 +274,10 @@ impl Value {
             Value::String(s) => 3 + s.len(),
             Value::Error(msg) => 3 + msg.len(),
             Value::Integer(_int) => todo!(),
-            Value::BulkString(s) => 6 + s.len(),
-            Value::Array(arr) => 3 + 1 + arr.iter().map(|x| x.buf_size()).sum::<usize>(),
+            Value::BulkString(s) => 5 + s.len() + s.len().to_string().len(),
+            Value::Array(arr) => {
+                3 + arr.len().to_string().len() + arr.iter().map(|x| x.buf_size()).sum::<usize>()
+            }
             Value::NullArray => 4,
             _ => todo!(),
         }
