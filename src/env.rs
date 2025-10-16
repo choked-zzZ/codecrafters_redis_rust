@@ -9,7 +9,7 @@ use std::{
 use bytes::Bytes;
 use tokio::{
     net::TcpStream,
-    sync::{mpsc, oneshot},
+    sync::{mpsc, oneshot, Mutex},
 };
 use tokio_util::codec::Framed;
 
@@ -27,7 +27,7 @@ pub struct Env {
     pub expiry: Expiry,
     pub waitlist: HashMap<Arc<Bytes>, VecDeque<WaitFor>>,
     pub in_transaction: HashMap<SocketAddr, Vec<RedisCommand>>,
-    pub replicas: Vec<Framed<TcpStream, RespParser>>,
+    pub replicas: Vec<Arc<Mutex<Framed<TcpStream, RespParser>>>>,
     pub ack: usize,
     pub file_path: Option<Box<Path>>,
     pub channels: HashMap<Arc<Bytes>, Vec<mpsc::Sender<Value>>>,

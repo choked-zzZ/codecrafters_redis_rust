@@ -1,12 +1,12 @@
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use clap::Parser;
-use futures::lock::Mutex;
 use futures::SinkExt;
 use futures::StreamExt;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::Mutex;
 use tokio_util::codec::Framed;
 
 use crate::redis_command::RedisCommand;
@@ -43,17 +43,21 @@ async fn connection_handler(
     addr: SocketAddr,
     args: Arc<Args>,
 ) {
-    let mut framed = Framed::new(stream, RespParser);
+    let framed = Framed::new(stream, RespParser);
+    let framed = Arc::new(Mutex::new(framed));
 
-    while let Some(result) = framed.next().await {
+    while let Some(result) = framed.lock().await.next().await {
         match result {
             Ok(value) => {
                 eprintln!("address {addr} get recieved: {value:?}");
                 let value = Arc::new(value);
                 let command = RedisCommand::parse_command(value.clone());
-                let response = command.clone().exec(env.clone(), addr, args.clone()).await;
+                let response = command
+                    .clone()
+                    .exec(env.clone(), addr, args.clone(), framed.clone())
+                    .await;
                 eprintln!("{addr} will send back: {response:?}");
-                if let Err(e) = framed.send(&response).await {
+                if let Err(e) = framed.lock().await.send(&response).await {
                     eprintln!("carsh into error: {e}");
                     eprintln!("connection closed.");
                     return;
@@ -65,8 +69,13 @@ async fn connection_handler(
                     break;
                 }
                 if command.can_modify() {
-                    for replica in env.replicas.iter_mut() {
-                        replica.send(&value).await.expect("send error.");
+                    for replica_framed in env.replicas.iter_mut() {
+                        replica_framed
+                            .lock()
+                            .await
+                            .send(&value)
+                            .await
+                            .expect("send error.");
                         eprintln!("send a command {command:?} to one replica");
                     }
                     eprintln!("command {command:?} send completed");
@@ -87,7 +96,7 @@ async fn connection_handler(
             }
         }
     }
-    env.lock().await.replicas.push(framed);
+    env.lock().await.replicas.push(framed.clone());
     eprintln!("{addr}: replica mode on.")
 }
 
@@ -134,13 +143,17 @@ async fn replica_handler(addr: String, args: &Arc<Args>, env: Arc<Mutex<Env>>) {
         framed.send(&psync).await.unwrap();
         framed.next().await;
         framed.next().await;
-        while let Some(result) = framed.next().await {
+        let framed = Arc::new(Mutex::new(framed));
+        while let Some(result) = framed.lock().await.next().await {
             match result {
                 Ok(value) => {
                     eprintln!("got {value:?}");
                     let value = Arc::new(value);
                     let command = RedisCommand::parse_command(value.clone());
-                    let response = command.clone().exec(env.clone(), addr, args.clone()).await;
+                    let response = command
+                        .clone()
+                        .exec(env.clone(), addr, args.clone(), framed.clone())
+                        .await;
                     env.lock().await.ack += value.buf_size();
                     eprintln!(
                         "127.0.0.1:{} increse ack with {} so it becomes {}",
@@ -150,7 +163,7 @@ async fn replica_handler(addr: String, args: &Arc<Args>, env: Arc<Mutex<Env>>) {
                     );
                     if matches!(command, RedisCommand::Replconf(..)) {
                         eprintln!("{addr} will send back: {response:?}");
-                        if let Err(e) = framed.send(&response).await {
+                        if let Err(e) = framed.lock().await.send(&response).await {
                             eprintln!("carsh into error: {e}");
                             eprintln!("connection closed.");
                             return;
