@@ -678,7 +678,7 @@ impl RedisCommand {
                     let env = env.lock().await;
                     let channel = env.channels.get(&channel).unwrap();
                     let publish = channel.len();
-                    for (_addr, (sender, _handler)) in channel {
+                    for (sender, _handler) in channel.values() {
                         sender.send(message.clone()).await.unwrap();
                     }
                     Value::Integer(publish as i64)
