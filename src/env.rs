@@ -96,6 +96,8 @@ impl SortedSet {
         let val = Score(val);
         self.list.insert((val, key.clone()));
         eprintln!("{:?} {:?}", val, self.map);
-        self.map.insert(key.clone(), val).map(|x| x.0)
+        let r = self.map.insert(key.clone(), val).map(|x| x.0);
+        eprintln!("{r:?}");
+        r
     }
 }
