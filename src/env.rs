@@ -11,6 +11,7 @@ use futures::stream::SplitStream;
 use tokio::{
     net::TcpStream,
     sync::{mpsc, oneshot},
+    task::JoinHandle,
 };
 use tokio_util::codec::Framed;
 
@@ -32,7 +33,7 @@ pub struct Env {
     pub replicas: Vec<(Arc<mpsc::Sender<Value>>, SplitStream<_Framed>)>,
     pub ack: usize,
     pub file_path: Option<Box<Path>>,
-    pub channels: HashMap<Arc<Bytes>, Vec<mpsc::Sender<Value>>>,
+    pub channels: HashMap<Arc<Bytes>, HashMap<SocketAddr, (mpsc::Sender<Value>, JoinHandle<()>)>>,
     pub subscription: HashMap<SocketAddr, HashSet<Arc<Bytes>>>,
 }
 

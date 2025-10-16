@@ -52,7 +52,7 @@ pub enum RedisCommand {
     Config(Value, Value),
     Subscribe(Bytes),
     Publish(Bytes, Value),
-    // Unsubscribe,
+    Unsubscribe(Bytes),
     // PSubscribe,
     // PUnsubscribe,
     // Quit,
@@ -90,6 +90,7 @@ impl RedisCommand {
             Self::Config(_, _) => "CONFIG",
             Self::Subscribe(_) => "SUBSCRIBE",
             Self::Publish(_, _) => "PUBLISH",
+            Self::Unsubscribe(_) => "UNSUBSCRIBE",
         }
         .into()
     }
@@ -112,7 +113,10 @@ impl RedisCommand {
     }
 
     fn allow_when_subscribe(&self) -> bool {
-        matches!(self, RedisCommand::Subscribe(..) | RedisCommand::Ping)
+        matches!(
+            self,
+            RedisCommand::Subscribe(..) | RedisCommand::Ping | RedisCommand::Unsubscribe(..)
+        )
     }
 
     async fn sub_mode_exec(
@@ -135,6 +139,30 @@ impl RedisCommand {
             ),
             RedisCommand::Subscribe(subscribe_to) => {
                 subscribe(env, addr, subscribe_to, sender).await
+            }
+            RedisCommand::Unsubscribe(unsubscribe_to) => {
+                let mut env = env.lock().await;
+                let unsubscribe_to = Arc::new(unsubscribe_to);
+                env.subscription.entry(addr).and_modify(|x| {
+                    x.remove(unsubscribe_to.as_ref());
+                });
+                match env.channels.entry(unsubscribe_to.clone()) {
+                    Entry::Occupied(mut entry) => {
+                        let (sender, handle) = entry.get_mut().get_mut(&addr).unwrap();
+                        handle.abort();
+                        sender.closed().await;
+                        entry.remove_entry();
+                    }
+                    Entry::Vacant(_) => panic!(),
+                }
+                Value::Array(
+                    [
+                        Value::BulkString("subscribe".into()),
+                        Value::BulkString(unsubscribe_to.as_ref().clone()),
+                        Value::Integer(env.subscription.get(&addr).unwrap().len() as _),
+                    ]
+                    .into(),
+                )
             }
             _ => unreachable!(),
         }
@@ -650,11 +678,12 @@ impl RedisCommand {
                     let env = env.lock().await;
                     let channel = env.channels.get(&channel).unwrap();
                     let publish = channel.len();
-                    for sender in channel {
+                    for (_addr, (sender, _handler)) in channel {
                         sender.send(message.clone()).await.unwrap();
                     }
                     Value::Integer(publish as i64)
-                } // _ => unreachable!(),
+                }
+                _ => unreachable!(),
             }
         })
     }
@@ -848,6 +877,10 @@ impl RedisCommand {
                         let message = arr.get(2).unwrap().clone();
                         RedisCommand::Publish(channel, message)
                     }
+                    "UNSUBSCRIBE" => {
+                        let object = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        RedisCommand::Unsubscribe(object)
+                    }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
             }
@@ -869,12 +902,8 @@ async fn subscribe(
         .entry(addr)
         .or_insert(HashSet::new())
         .insert(subscribe_to.clone());
-    env.channels
-        .entry(subscribe_to.clone())
-        .or_insert(Vec::new())
-        .push(tx);
     let channel_name = subscribe_to.clone();
-    tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         while let Some(val) = rx.recv().await {
             let response = Value::Array(
                 [
@@ -887,6 +916,10 @@ async fn subscribe(
             sender.send(response).await.unwrap();
         }
     });
+    env.channels
+        .entry(subscribe_to.clone())
+        .or_insert(HashMap::new())
+        .insert(addr, (tx, handle));
     Value::Array(
         [
             Value::BulkString("subscribe".into()),
