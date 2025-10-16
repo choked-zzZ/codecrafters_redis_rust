@@ -74,7 +74,7 @@ async fn connection_handler(
                     .expect("Error when send response to the output thread.");
                 let mut env = env.lock().await;
                 if matches!(command, RedisCommand::PSync(..)) {
-                    env.ack -= 106;
+                    env.ack -= 14 + 48 + 40 + 1;
                     eprintln!("handshake over, ack now drop to {}", env.ack);
                     break;
                 }
