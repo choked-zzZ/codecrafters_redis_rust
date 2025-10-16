@@ -97,6 +97,7 @@ async fn connection_handler(
             }
         }
     }
+
     env.lock().await.replicas.push(framed.clone());
     eprintln!("{addr}: replica mode on.")
 }

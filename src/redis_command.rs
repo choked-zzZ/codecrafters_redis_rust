@@ -157,6 +157,7 @@ impl RedisCommand {
         addr: SocketAddr,
         args: Arc<Args>,
         framed: Arc<Mutex<Framed<TcpStream, RespParser>>>,
+        // framed: Arc<Mutex<Framed<TcpStream, RespParser>>>,
     ) -> Pin<Box<dyn Future<Output = Value> + Send>> {
         Box::pin(async move {
             if !matches!(self, RedisCommand::Exec | RedisCommand::Discard) {
@@ -672,7 +673,7 @@ impl RedisCommand {
                         .push(tx);
                     let channel_name = subscribe_to.clone();
                     let framed_move = framed.clone();
-                    let a = tokio::spawn(async move {
+                    tokio::spawn(async move {
                         while let Some(val) = rx.recv().await {
                             let response = Value::Array(
                                 [
@@ -682,7 +683,8 @@ impl RedisCommand {
                                 ]
                                 .into(),
                             );
-                            framed_move.lock().await.send(&response).await.unwrap();
+                            let mut tx = framed_move.lock().await;
+                            tx.send(&response).await.unwrap();
                         }
                     });
                     Value::Array(
