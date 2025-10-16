@@ -157,7 +157,7 @@ impl RedisCommand {
                 }
                 Value::Array(
                     [
-                        Value::BulkString("subscribe".into()),
+                        Value::BulkString("unsubscribe".into()),
                         Value::BulkString(unsubscribe_to.as_ref().clone()),
                         Value::Integer(env.subscription.get(&addr).unwrap().len() as _),
                     ]
