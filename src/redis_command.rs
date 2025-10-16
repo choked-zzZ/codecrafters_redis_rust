@@ -148,10 +148,14 @@ impl RedisCommand {
                 });
                 match env.channels.entry(unsubscribe_to.clone()) {
                     Entry::Occupied(mut entry) => {
-                        let (sender, handle) = entry.get_mut().get_mut(&addr).unwrap();
+                        let map = entry.get_mut();
+                        let (sender, handle) = map.get_mut(&addr).unwrap();
                         handle.abort();
                         sender.closed().await;
-                        entry.remove_entry();
+                        map.remove(&addr);
+                        if map.is_empty() {
+                            entry.remove_entry();
+                        }
                     }
                     Entry::Vacant(_) => panic!(),
                 }
