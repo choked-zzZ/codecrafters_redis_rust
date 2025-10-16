@@ -12,7 +12,6 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use bytes::Bytes;
 use futures::StreamExt;
 use itertools::Itertools;
-use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
@@ -168,6 +167,7 @@ impl RedisCommand {
                 }
             }
             let in_sub_mode = env.lock().await.is_in_sub_mode(&addr);
+            eprintln!("{in_sub_mode}");
             if in_sub_mode {
                 return self.sub_mode_exec(env, addr, args, sender).await;
             }
