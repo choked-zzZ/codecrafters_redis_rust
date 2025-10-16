@@ -700,7 +700,7 @@ impl RedisCommand {
                         Entry::Occupied(mut entry) => {
                             let sorted_set = entry.get_mut();
                             let r = sorted_set.insert(key, val);
-                            Value::Integer(if r.is_some() { 1 } else { 0 })
+                            Value::Integer(if r.is_none() { 1 } else { 0 })
                         }
                     }
                 }
