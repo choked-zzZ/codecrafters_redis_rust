@@ -678,7 +678,7 @@ impl RedisCommand {
                     let env = env.lock().await;
                     let channel = env.channels.get(&channel).unwrap();
                     let publish = channel.len();
-                    eprintln!("{channel:?}");
+                    eprintln!("the channel will publish: {channel:?}");
                     for (sender, _handler) in channel.values() {
                         sender.send(message.clone()).await.expect("error.");
                     }
