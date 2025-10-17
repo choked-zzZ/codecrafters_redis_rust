@@ -771,8 +771,8 @@ impl RedisCommand {
                                     |(lat, lon)| {
                                         Value::Array(
                                             [
-                                                Value::BulkString(lat.to_string().into()),
                                                 Value::BulkString(lon.to_string().into()),
+                                                Value::BulkString(lat.to_string().into()),
                                             ]
                                             .into(),
                                         )
