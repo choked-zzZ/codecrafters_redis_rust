@@ -58,8 +58,8 @@ fn convert_score_to_coordinates(score: u64) -> (f64, f64) {
     let longitude = compact_u64_to_u32(score >> 1);
     let lat_min = MIN_LATITUDE + LATITUDE_RANGE * (latitude as f64 / SCALE_FACTOR);
     let lat_max = MIN_LATITUDE + LATITUDE_RANGE * ((latitude + 1) as f64 / SCALE_FACTOR);
-    let lon_min = MIN_LONGITUDE + LATITUDE_RANGE * (longitude as f64 / SCALE_FACTOR);
-    let lon_max = MIN_LONGITUDE + LATITUDE_RANGE * ((longitude + 1) as f64 / SCALE_FACTOR);
+    let lon_min = MIN_LONGITUDE + LONGITUDE_RANGE * (longitude as f64 / SCALE_FACTOR);
+    let lon_max = MIN_LONGITUDE + LONGITUDE_RANGE * ((longitude + 1) as f64 / SCALE_FACTOR);
 
     (lat_min.midpoint(lat_max), lon_min.midpoint(lon_max))
 }
@@ -84,6 +84,5 @@ mod test {
     #[test]
     fn encode() {
         assert_eq!(interleave_f64(13.7220, 100.5252), 3962257306574459);
-        eprintln!("{:?}", convert_score_to_coordinates(3962257306574459));
     }
 }
