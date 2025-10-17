@@ -722,7 +722,9 @@ impl RedisCommand {
                 }
                 RedisCommand::ZRange(name, l_bound, r_bound) => {
                     let env = env.lock().await;
-                    let sorted_set = env.sorted_sets.get(&name).unwrap();
+                    let Some(sorted_set) = env.sorted_sets.get(&name) else {
+                        return Value::Array([].into());
+                    };
                     let result = sorted_set.range(l_bound, r_bound);
                     Value::Array(result)
                 }
