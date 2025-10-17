@@ -986,6 +986,13 @@ impl RedisCommand {
                         let key = arr.get(2).unwrap().as_bulk_string().unwrap().clone();
                         RedisCommand::ZRem(sorted_set_name, key)
                     }
+                    "GEOADD" => {
+                        let sorted_set_name = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        let latitude = arr.get(2).unwrap().as_float().unwrap();
+                        let longitude = arr.get(3).unwrap().as_float().unwrap();
+                        let key = arr.get(4).unwrap().as_bulk_string().unwrap().clone();
+                        RedisCommand::GeoAdd(sorted_set_name, latitude, longitude, key)
+                    }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
             }
