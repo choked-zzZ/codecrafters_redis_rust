@@ -61,6 +61,7 @@ pub enum RedisCommand {
     ZRem(Bytes, Bytes),
     GeoAdd(Bytes, f64, f64, Bytes),
     GeoPos(Bytes, Vec<Bytes>),
+    GeoDist(Bytes, Bytes, Bytes),
 }
 
 impl RedisCommand {
@@ -103,6 +104,7 @@ impl RedisCommand {
             Self::ZRem(_, _) => "ZREM",
             Self::GeoAdd(_, _, _, _) => "GEOADD",
             Self::GeoPos(_, _) => "GEOPOS",
+            Self::GeoDist(_, _, _) => "GEODIST",
         }
     }
 
@@ -784,6 +786,14 @@ impl RedisCommand {
                     }
                     Value::Array(result)
                 }
+                RedisCommand::GeoDist(name, place1, place2) => {
+                    let env = env.lock().await;
+                    let sorted_set = env.sorted_sets.get(&name).unwrap();
+                    let &place1_score = sorted_set.get(&place1).unwrap();
+                    let &place2_score = sorted_set.get(&place2).unwrap();
+                    let dist = geo_module::distance(place1_score, place2_score);
+                    Value::BulkString(dist.to_string().into())
+                }
                 _ => unreachable!(),
             }
         })
@@ -1028,6 +1038,13 @@ impl RedisCommand {
                             .map(|x| x.as_bulk_string().unwrap().clone())
                             .collect();
                         RedisCommand::GeoPos(sorted_set_name, places)
+                    }
+                    "GEODIST" => {
+                        let sorted_set_name = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        let place1 = arr.get(2).unwrap().as_bulk_string().unwrap().clone();
+                        let place2 = arr.get(3).unwrap().as_bulk_string().unwrap().clone();
+
+                        RedisCommand::GeoDist(sorted_set_name, place1, place2)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }

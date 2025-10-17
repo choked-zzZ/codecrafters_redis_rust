@@ -6,6 +6,8 @@ const MAX_LONGITUDE: f64 = 180.0;
 const LATITUDE_RANGE: f64 = MAX_LATITUDE - MIN_LATITUDE;
 const LONGITUDE_RANGE: f64 = MAX_LONGITUDE - MIN_LONGITUDE;
 
+const EARTH_RADIUS: f64 = 6372797.560856;
+
 const SCALE_FACTOR: f64 = (1 << 26) as f64;
 
 fn normalize_latitude(latitude: f64) -> u32 {
@@ -76,9 +78,26 @@ fn compact_u64_to_u32(v: u64) -> u32 {
     v as _
 }
 
+pub fn distance(score1: f64, score2: f64) -> f64 {
+    let (lat1, lon1) = decode(score1);
+    let (lat2, lon2) = decode(score2);
+    haversine(lat1, lon1, lat2, lon2)
+}
+
+fn haversine(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+    let lat1 = lat1.to_radians();
+    let lat2 = lat2.to_radians();
+    let delta_lat = lat2 - lat1;
+    let delta_lon = (lon2 - lon1).to_radians();
+    let a =
+        (delta_lat / 2.0).sin().powi(2) + (delta_lon / 2.0).sin().powi(2) * lat1.cos() * lat2.cos();
+    let c = 2.0 * a.sqrt().asin();
+
+    EARTH_RADIUS * c
+}
+
 #[cfg(test)]
 mod test {
-    use crate::geo_module::convert_score_to_coordinates;
     use crate::geo_module::interleave_f64;
 
     #[test]
