@@ -745,7 +745,7 @@ impl RedisCommand {
                         .remove(&key)
                         .map_or(Value::Integer(0), |_| Value::Integer(1))
                 }
-                RedisCommand::GeoAdd(name, latitude, longitude, key) => {
+                RedisCommand::GeoAdd(name, longitude, latitude, key) => {
                     eprintln!("{} {}", latitude, longitude);
                     let Some(val) = geo_module::encode(latitude, longitude) else {
                         return Value::Error(
