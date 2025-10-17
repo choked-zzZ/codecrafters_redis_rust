@@ -78,10 +78,12 @@ fn compact_u64_to_u32(v: u64) -> u32 {
 
 #[cfg(test)]
 mod test {
+    use crate::geo_module::convert_score_to_coordinates;
     use crate::geo_module::interleave_f64;
 
     #[test]
     fn encode() {
         assert_eq!(interleave_f64(13.7220, 100.5252), 3962257306574459);
+        eprintln!("{:?}", convert_score_to_coordinates(3962257306574459));
     }
 }
