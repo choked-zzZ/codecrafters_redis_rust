@@ -108,7 +108,7 @@ impl SortedSet {
         if l_bound >= size || l_bound > r_bound {
             return [].into();
         }
-        let r_bound = size.max(r_bound + 1);
+        let r_bound = size.min(r_bound + 1);
         self.list
             .index_range(l_bound..r_bound)
             .map(|(val, key)| Value::BulkString(key.as_ref().clone()))
