@@ -106,12 +106,12 @@ impl SortedSet {
     pub fn range(&self, l_bound: isize, r_bound: isize) -> VecDeque<Value> {
         let size = self.size();
         let l_bound = if l_bound < 0 {
-            size.checked_sub_signed(l_bound).unwrap_or(0)
+            size.checked_add_signed(l_bound).unwrap_or(0)
         } else {
             l_bound as _
         };
         let r_bound = if r_bound < 0 {
-            size.checked_sub_signed(r_bound).unwrap_or(0)
+            size.checked_add_signed(r_bound).unwrap_or(0)
         } else {
             r_bound as _
         };
