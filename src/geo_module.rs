@@ -18,9 +18,11 @@ fn normalize_longitude(longitude: f64) -> u32 {
 
 pub fn encode(latitude: f64, longitude: f64) -> Option<f64> {
     if !(MIN_LATITUDE..=MAX_LATITUDE).contains(&latitude) {
+        eprintln!("aaa");
         return None;
     }
     if !(MIN_LONGITUDE..=MAX_LONGITUDE).contains(&longitude) {
+        eprintln!("bbb");
         return None;
     }
     Some(interleave_f64(latitude, longitude) as f64)
