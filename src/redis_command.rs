@@ -60,6 +60,7 @@ pub enum RedisCommand {
     ZScore(Bytes, Bytes),
     ZRem(Bytes, Bytes),
     GeoAdd(Bytes, f64, f64, Bytes),
+    GeoPos(Bytes, Vec<Bytes>),
 }
 
 impl RedisCommand {
@@ -101,6 +102,7 @@ impl RedisCommand {
             Self::ZScore(_, _) => "ZSCORE",
             Self::ZRem(_, _) => "ZREM",
             Self::GeoAdd(_, _, _, _) => "GEOADD",
+            Self::GeoPos(_, _) => "GEOPOS",
         }
     }
 
@@ -758,6 +760,30 @@ impl RedisCommand {
                     };
                     zadd(&env, name, val, key).await
                 }
+                RedisCommand::GeoPos(name, places) => {
+                    let env = env.lock().await;
+                    let Some(sorted_set) = env.sorted_sets.get(&name) else {
+                        return Value::Array([Value::NullArray, Value::NullArray].into());
+                    };
+                    let mut result = VecDeque::new();
+                    for place in places {
+                        let locatoin = sorted_set
+                            .get(&place)
+                            .map(|x| geo_module::decode(*x))
+                            .map(|(lat, lon)| {
+                                Value::Array(
+                                    [
+                                        Value::BulkString(lon.to_string().into()),
+                                        Value::BulkString(lat.to_string().into()),
+                                    ]
+                                    .into(),
+                                )
+                            })
+                            .unwrap_or(Value::Array([Value::NullArray].into()));
+                        result.push_back(locatoin);
+                    }
+                    Value::Array(result)
+                }
                 _ => unreachable!(),
             }
         })
@@ -993,6 +1019,14 @@ impl RedisCommand {
                         let longitude = arr.get(3).unwrap().as_float().unwrap();
                         let key = arr.get(4).unwrap().as_bulk_string().unwrap().clone();
                         RedisCommand::GeoAdd(sorted_set_name, latitude, longitude, key)
+                    }
+                    "GEOPOS" => {
+                        let sorted_set_name = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        let places = arr
+                            .iter()
+                            .map(|x| x.as_bulk_string().unwrap().clone())
+                            .collect();
+                        RedisCommand::GeoPos(sorted_set_name, places)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
