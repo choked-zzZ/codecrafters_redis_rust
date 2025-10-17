@@ -132,4 +132,7 @@ impl SortedSet {
         let val = self.map.remove(key)?;
         self.list.remove(&(val, key.clone())).map(|x| x.0)
     }
+    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, Arc<Bytes>, f64> {
+        self.map.iter()
+    }
 }

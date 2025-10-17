@@ -62,6 +62,7 @@ pub enum RedisCommand {
     GeoAdd(Bytes, f64, f64, Bytes),
     GeoPos(Bytes, Vec<Bytes>),
     GeoDist(Bytes, Bytes, Bytes),
+    GeoSearch(Bytes, f64, f64, f64),
 }
 
 impl RedisCommand {
@@ -105,6 +106,7 @@ impl RedisCommand {
             Self::GeoAdd(_, _, _, _) => "GEOADD",
             Self::GeoPos(_, _) => "GEOPOS",
             Self::GeoDist(_, _, _) => "GEODIST",
+            Self::GeoSearch(_, _, _, _) => "GEOSEARCH",
         }
     }
 
@@ -794,6 +796,19 @@ impl RedisCommand {
                     let dist = geo_module::distance(place1_score, place2_score);
                     Value::BulkString(dist.to_string().into())
                 }
+                RedisCommand::GeoSearch(name, lon, lat, dist_range) => {
+                    let env = env.lock().await;
+                    let sorted_set = env.sorted_sets.get(&name).unwrap();
+                    let mut result = VecDeque::new();
+                    for (place, &score1) in sorted_set.iter() {
+                        let score2 = geo_module::encode(lat, lon).unwrap();
+                        let dist = geo_module::distance(score1, score2);
+                        if dist < dist_range {
+                            result.push_back(Value::BulkString(place.as_ref().clone()));
+                        }
+                    }
+                    Value::Array(result)
+                }
                 _ => unreachable!(),
             }
         })
@@ -1045,6 +1060,23 @@ impl RedisCommand {
                         let place2 = arr.get(3).unwrap().as_bulk_string().unwrap().clone();
 
                         RedisCommand::GeoDist(sorted_set_name, place1, place2)
+                    }
+                    "GEOSEARCH" => {
+                        let sorted_set = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        let from_lon_lat = arr.get(2).unwrap().as_bulk_string().unwrap();
+                        let from_lon_lat =
+                            str::from_utf8(from_lon_lat).unwrap().to_ascii_uppercase();
+                        assert_eq!(from_lon_lat, "FROMLONLAT");
+                        let lon = arr.get(3).unwrap().as_float().unwrap();
+                        let lat = arr.get(4).unwrap().as_float().unwrap();
+                        let by_radius = arr.get(5).unwrap().as_bulk_string().unwrap();
+                        let by_radius = str::from_utf8(by_radius).unwrap().to_ascii_uppercase();
+                        assert_eq!(by_radius, "BYRADIUS");
+                        let dist = arr.get(6).unwrap().as_float().unwrap();
+                        let unit = arr.get(7).unwrap().as_bulk_string().unwrap();
+                        let unit = str::from_utf8(unit).unwrap().to_ascii_uppercase();
+                        assert_eq!(unit, "M");
+                        RedisCommand::GeoSearch(sorted_set, lon, lat, dist)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
