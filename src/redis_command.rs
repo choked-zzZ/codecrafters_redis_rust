@@ -762,21 +762,21 @@ impl RedisCommand {
                 }
                 RedisCommand::GeoPos(name, places) => {
                     let env = env.lock().await;
-                    let Some(sorted_set) = env.sorted_sets.get(&name) else {
-                        return Value::Array([Value::NullArray, Value::NullArray].into());
-                    };
+                    let sorted_set = env.sorted_sets.get(&name);
                     let mut result = VecDeque::new();
                     for place in places {
                         let locatoin = sorted_set
-                            .get(&place)
-                            .map(|x| geo_module::decode(*x))
-                            .map(|(lat, lon)| {
-                                Value::Array(
-                                    [
-                                        Value::BulkString(lon.to_string().into()),
-                                        Value::BulkString(lat.to_string().into()),
-                                    ]
-                                    .into(),
+                            .and_then(|sorted_set| {
+                                sorted_set.get(&place).map(|x| geo_module::decode(*x)).map(
+                                    |(lat, lon)| {
+                                        Value::Array(
+                                            [
+                                                Value::BulkString(lon.to_string().into()),
+                                                Value::BulkString(lat.to_string().into()),
+                                            ]
+                                            .into(),
+                                        )
+                                    },
                                 )
                             })
                             .unwrap_or(Value::Array([Value::NullArray].into()));
