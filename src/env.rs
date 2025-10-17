@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeSet, HashMap, HashSet, VecDeque},
     net::SocketAddr,
+    ops::Bound::Included,
     path::Path,
     sync::Arc,
     time::SystemTime,
@@ -96,5 +97,12 @@ impl SortedSet {
     pub fn rank(&self, key: &Arc<Bytes>) -> Option<usize> {
         let (k, &v) = self.map.get_key_value(key)?;
         self.list.index_of(&(v, k.clone()))
+    }
+
+    pub fn range(&self, l_bound: usize, r_bound: usize) -> VecDeque<Value> {
+        self.list
+            .index_range(l_bound..r_bound + 1)
+            .map(|(val, key)| Value::BulkString(key.as_ref().clone()))
+            .collect()
     }
 }

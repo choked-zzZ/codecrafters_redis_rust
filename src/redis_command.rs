@@ -55,6 +55,7 @@ pub enum RedisCommand {
     Unsubscribe(Bytes),
     ZAdd(Bytes, f64, Bytes),
     ZRank(Bytes, Bytes),
+    ZRange(Bytes, usize, usize),
 }
 
 impl RedisCommand {
@@ -91,6 +92,7 @@ impl RedisCommand {
             Self::Unsubscribe(_) => "UNSUBSCRIBE",
             Self::ZAdd(_, _, _) => "ZADD",
             Self::ZRank(_, _) => "ZRANK",
+            Self::ZRange(_, _, _) => "ZRANGE",
         }
         .into()
     }
@@ -718,6 +720,12 @@ impl RedisCommand {
                         Some(rank) => Value::Integer(rank as i64),
                     }
                 }
+                RedisCommand::ZRange(name, l_bound, r_bound) => {
+                    let env = env.lock().await;
+                    let sorted_set = env.sorted_sets.get(&name).unwrap();
+                    let result = sorted_set.range(l_bound, r_bound);
+                    Value::Array(result)
+                }
                 _ => unreachable!(),
             }
         })
@@ -926,6 +934,12 @@ impl RedisCommand {
                         let sorted_set_name = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         let key = arr.get(2).unwrap().as_bulk_string().unwrap().clone();
                         RedisCommand::ZRank(sorted_set_name, key)
+                    }
+                    "ZRANGE" => {
+                        let sorted_set_name = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        let l_bound = arr.get(2).unwrap().as_integer().unwrap() as _;
+                        let r_bound = arr.get(3).unwrap().as_integer().unwrap() as _;
+                        RedisCommand::ZRange(sorted_set_name, l_bound, r_bound)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
