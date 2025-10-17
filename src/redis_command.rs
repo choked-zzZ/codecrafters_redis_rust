@@ -56,6 +56,7 @@ pub enum RedisCommand {
     ZAdd(Bytes, f64, Bytes),
     ZRank(Bytes, Bytes),
     ZRange(Bytes, isize, isize),
+    ZCard(Bytes),
 }
 
 impl RedisCommand {
@@ -93,6 +94,7 @@ impl RedisCommand {
             Self::ZAdd(_, _, _) => "ZADD",
             Self::ZRank(_, _) => "ZRANK",
             Self::ZRange(_, _, _) => "ZRANGE",
+            Self::ZCard(_) => "ZCARD",
         }
         .into()
     }
@@ -728,6 +730,13 @@ impl RedisCommand {
                     let result = sorted_set.range(l_bound, r_bound);
                     Value::Array(result)
                 }
+                RedisCommand::ZCard(name) => {
+                    let env = env.lock().await;
+                    let Some(sorted_set) = env.sorted_sets.get(&name) else {
+                        return Value::Integer(0);
+                    };
+                    Value::Integer(sorted_set.cardinality() as i64)
+                }
                 _ => unreachable!(),
             }
         })
@@ -942,6 +951,10 @@ impl RedisCommand {
                         let l_bound = arr.get(2).unwrap().as_integer().unwrap() as _;
                         let r_bound = arr.get(3).unwrap().as_integer().unwrap() as _;
                         RedisCommand::ZRange(sorted_set_name, l_bound, r_bound)
+                    }
+                    "ZCARD" => {
+                        let sorted_set_name = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        RedisCommand::ZCard(sorted_set_name)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }

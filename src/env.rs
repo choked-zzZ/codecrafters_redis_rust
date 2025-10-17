@@ -99,12 +99,12 @@ impl SortedSet {
         self.list.index_of(&(v, k.clone()))
     }
 
-    fn size(&self) -> usize {
+    pub fn cardinality(&self) -> usize {
         self.list.len()
     }
 
     pub fn range(&self, l_bound: isize, r_bound: isize) -> VecDeque<Value> {
-        let size = self.size();
+        let size = self.cardinality();
         let l_bound = if l_bound < 0 {
             size.checked_add_signed(l_bound).unwrap_or(0)
         } else {
