@@ -18,7 +18,7 @@ use tokio::time::timeout;
 
 use crate::env::{Expiry, Map, SortedSet, WaitFor};
 use crate::resp_decoder::{Stream, StreamID};
-use crate::{rdb_reader, REPL_ID};
+use crate::{geo_module, rdb_reader, REPL_ID};
 use crate::{resp_decoder::Value, Env};
 use crate::{Args, REPL_OFFSET};
 
@@ -59,10 +59,11 @@ pub enum RedisCommand {
     ZCard(Bytes),
     ZScore(Bytes, Bytes),
     ZRem(Bytes, Bytes),
+    GeoAdd(Bytes, f64, f64, Bytes),
 }
 
 impl RedisCommand {
-    fn show(&self) -> String {
+    const fn show(&self) -> &'static str {
         match self {
             Self::Ping => "PING",
             Self::Echo(_) => "ECHO",
@@ -99,8 +100,8 @@ impl RedisCommand {
             Self::ZCard(_) => "ZCARD",
             Self::ZScore(_, _) => "ZSCORE",
             Self::ZRem(_, _) => "ZREM",
+            Self::GeoAdd(_, _, _, _) => "GEOADD",
         }
-        .into()
     }
 
     pub fn can_modify(&self) -> bool {
@@ -696,24 +697,7 @@ impl RedisCommand {
                     }
                     Value::Integer(publish as i64)
                 }
-                RedisCommand::ZAdd(name, val, key) => {
-                    let mut env = env.lock().await;
-                    let name = Arc::new(name);
-                    let key = Arc::new(key);
-                    match env.sorted_sets.entry(name) {
-                        Entry::Vacant(entry) => {
-                            let mut sorted_set = SortedSet::default();
-                            sorted_set.insert(key, val);
-                            entry.insert(sorted_set);
-                            Value::Integer(1)
-                        }
-                        Entry::Occupied(mut entry) => {
-                            let sorted_set = entry.get_mut();
-                            let r = sorted_set.insert(key, val);
-                            Value::Integer(if r.is_none() { 1 } else { 0 })
-                        }
-                    }
-                }
+                RedisCommand::ZAdd(name, val, key) => zadd(&env, name, val, key).await,
                 RedisCommand::ZRank(name, key) => {
                     // let name = Arc::new(name);
                     let key = Arc::new(key);
@@ -760,6 +744,18 @@ impl RedisCommand {
                     sorted_set
                         .remove(&key)
                         .map_or(Value::Integer(0), |_| Value::Integer(1))
+                }
+                RedisCommand::GeoAdd(name, latitude, longitude, key) => {
+                    let Some(val) = geo_module::encode(latitude, longitude) else {
+                        return Value::Error(
+                            format!(
+                                "ERR invalid longitude,latitude pair {:.6},{:.6}",
+                                latitude, longitude,
+                            )
+                            .into(),
+                        );
+                    };
+                    zadd(&env, name, val, key).await
                 }
                 _ => unreachable!(),
             }
@@ -994,6 +990,25 @@ impl RedisCommand {
                 }
             }
             ref cmd => panic!("Unknown command {cmd:?}"),
+        }
+    }
+}
+
+async fn zadd(env: &Arc<Mutex<Env>>, name: Bytes, val: f64, key: Bytes) -> Value {
+    let mut env = env.lock().await;
+    let name = Arc::new(name);
+    let key = Arc::new(key);
+    match env.sorted_sets.entry(name) {
+        Entry::Vacant(entry) => {
+            let mut sorted_set = SortedSet::default();
+            sorted_set.insert(key, val);
+            entry.insert(sorted_set);
+            Value::Integer(1)
+        }
+        Entry::Occupied(mut entry) => {
+            let sorted_set = entry.get_mut();
+            let r = sorted_set.insert(key, val);
+            Value::Integer(if r.is_none() { 1 } else { 0 })
         }
     }
 }

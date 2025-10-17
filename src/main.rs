@@ -16,6 +16,7 @@ use crate::resp_decoder::Value;
 use env::Env;
 
 mod env;
+mod geo_module;
 mod rdb_reader;
 mod redis_command;
 mod resp_decoder;
