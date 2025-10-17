@@ -103,15 +103,25 @@ impl SortedSet {
         self.list.len()
     }
 
-    pub fn range(&self, l_bound: usize, r_bound: usize) -> VecDeque<Value> {
+    pub fn range(&self, l_bound: isize, r_bound: isize) -> VecDeque<Value> {
         let size = self.size();
+        let l_bound = if l_bound < 0 {
+            size.checked_sub_signed(l_bound).unwrap_or(0)
+        } else {
+            l_bound as _
+        };
+        let r_bound = if r_bound < 0 {
+            size.checked_sub_signed(r_bound).unwrap_or(0)
+        } else {
+            r_bound as _
+        };
         if l_bound >= size || l_bound > r_bound {
             return [].into();
         }
         let r_bound = size.min(r_bound + 1);
         self.list
             .index_range(l_bound..r_bound)
-            .map(|(val, key)| Value::BulkString(key.as_ref().clone()))
+            .map(|(_val, key)| Value::BulkString(key.as_ref().clone()))
             .collect()
     }
 }

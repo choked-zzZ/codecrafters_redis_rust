@@ -55,7 +55,7 @@ pub enum RedisCommand {
     Unsubscribe(Bytes),
     ZAdd(Bytes, f64, Bytes),
     ZRank(Bytes, Bytes),
-    ZRange(Bytes, usize, usize),
+    ZRange(Bytes, isize, isize),
 }
 
 impl RedisCommand {
