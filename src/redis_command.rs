@@ -779,7 +779,7 @@ impl RedisCommand {
                                     },
                                 )
                             })
-                            .unwrap_or(Value::Array([Value::NullArray].into()));
+                            .unwrap_or(Value::NullArray);
                         result.push_back(locatoin);
                     }
                     Value::Array(result)
