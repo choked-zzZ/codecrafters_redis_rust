@@ -128,4 +128,9 @@ impl SortedSet {
     pub fn get(&self, key: &Bytes) -> Option<&f64> {
         self.map.get(key)
     }
+
+    pub fn remove(&mut self, key: &Arc<Bytes>) -> Option<f64> {
+        let val = self.map.remove(key)?;
+        self.list.remove(&(val, key.clone())).map(|x| x.0)
+    }
 }

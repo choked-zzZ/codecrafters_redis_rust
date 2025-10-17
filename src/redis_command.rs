@@ -58,6 +58,7 @@ pub enum RedisCommand {
     ZRange(Bytes, isize, isize),
     ZCard(Bytes),
     ZScore(Bytes, Bytes),
+    ZRem(Bytes, Bytes),
 }
 
 impl RedisCommand {
@@ -97,6 +98,7 @@ impl RedisCommand {
             Self::ZRange(_, _, _) => "ZRANGE",
             Self::ZCard(_) => "ZCARD",
             Self::ZScore(_, _) => "ZSCORE",
+            Self::ZRem(_, _) => "ZREM",
         }
         .into()
     }
@@ -749,6 +751,16 @@ impl RedisCommand {
                         None => Value::NullBulkString,
                     }
                 }
+                RedisCommand::ZRem(name, key) => {
+                    let key = Arc::new(key);
+                    let mut env = env.lock().await;
+                    let Some(sorted_set) = env.sorted_sets.get_mut(&name) else {
+                        return Value::Integer(0);
+                    };
+                    sorted_set
+                        .remove(&key)
+                        .map_or(Value::Integer(0), |_| Value::Integer(1))
+                }
                 _ => unreachable!(),
             }
         })
@@ -972,6 +984,11 @@ impl RedisCommand {
                         let sorted_set_name = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         let key = arr.get(2).unwrap().as_bulk_string().unwrap().clone();
                         RedisCommand::ZScore(sorted_set_name, key)
+                    }
+                    "ZREM" => {
+                        let sorted_set_name = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        let key = arr.get(2).unwrap().as_bulk_string().unwrap().clone();
+                        RedisCommand::ZRem(sorted_set_name, key)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
