@@ -1024,6 +1024,7 @@ impl RedisCommand {
                         let sorted_set_name = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         let places = arr
                             .iter()
+                            .skip(2)
                             .map(|x| x.as_bulk_string().unwrap().clone())
                             .collect();
                         RedisCommand::GeoPos(sorted_set_name, places)
