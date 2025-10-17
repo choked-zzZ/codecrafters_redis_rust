@@ -82,10 +82,6 @@ impl Default for SortedSet {
 }
 
 impl SortedSet {
-    pub fn sep(&self) -> (&SSMap, &SSList) {
-        (&self.map, &self.list)
-    }
-
     pub fn insert(&mut self, key: Arc<Bytes>, val: f64) -> Option<f64> {
         if val.is_nan() {
             panic!()
@@ -98,7 +94,7 @@ impl SortedSet {
         res
     }
 
-    pub fn rank(&self, key: &Arc<Bytes>) -> Option<usize> {
+    pub fn rank(&self, key: &Bytes) -> Option<usize> {
         let (k, &v) = self.map.get_key_value(key)?;
         self.list.index_of(&(v, k.clone()))
     }
@@ -127,5 +123,9 @@ impl SortedSet {
             .index_range(l_bound..r_bound)
             .map(|(_val, key)| Value::BulkString(key.as_ref().clone()))
             .collect()
+    }
+
+    pub fn get(&self, key: &Bytes) -> Option<&f64> {
+        self.map.get(key)
     }
 }

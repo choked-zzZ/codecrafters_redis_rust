@@ -57,6 +57,7 @@ pub enum RedisCommand {
     ZRank(Bytes, Bytes),
     ZRange(Bytes, isize, isize),
     ZCard(Bytes),
+    ZScore(Bytes, Bytes),
 }
 
 impl RedisCommand {
@@ -95,6 +96,7 @@ impl RedisCommand {
             Self::ZRank(_, _) => "ZRANK",
             Self::ZRange(_, _, _) => "ZRANGE",
             Self::ZCard(_) => "ZCARD",
+            Self::ZScore(_, _) => "ZSCORE",
         }
         .into()
     }
@@ -737,6 +739,16 @@ impl RedisCommand {
                     };
                     Value::Integer(sorted_set.cardinality() as i64)
                 }
+                RedisCommand::ZScore(name, key) => {
+                    let env = env.lock().await;
+                    let Some(sorted_set) = env.sorted_sets.get(&name) else {
+                        return Value::NullBulkString;
+                    };
+                    match sorted_set.get(&key) {
+                        Some(val) => Value::BulkString(val.to_string().into()),
+                        None => Value::NullBulkString,
+                    }
+                }
                 _ => unreachable!(),
             }
         })
@@ -955,6 +967,11 @@ impl RedisCommand {
                     "ZCARD" => {
                         let sorted_set_name = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
                         RedisCommand::ZCard(sorted_set_name)
+                    }
+                    "ZSCORE" => {
+                        let sorted_set_name = arr.get(1).unwrap().as_bulk_string().unwrap().clone();
+                        let key = arr.get(2).unwrap().as_bulk_string().unwrap().clone();
+                        RedisCommand::ZScore(sorted_set_name, key)
                     }
                     _ => panic!("Unknown command or invalid arguments"),
                 }
