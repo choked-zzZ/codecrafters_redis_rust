@@ -90,8 +90,12 @@ impl SortedSet {
         if val.is_nan() {
             panic!()
         }
+        let res = self.map.insert(key.clone(), val);
+        if let Some(val) = res {
+            self.list.remove(&(val, key.clone()));
+        }
         self.list.insert((val, key.clone()));
-        self.map.insert(key.clone(), val)
+        res
     }
 
     pub fn rank(&self, key: &Arc<Bytes>) -> Option<usize> {
